@@ -126,13 +126,13 @@ function Register() {
               Full name
             </label>
             <input
-              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.name ? "border-red-400 bg-red-50" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.name ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
               placeholder="Type your full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
             {errors.name && (
-              <p className="mt-2 text-sm text-red-600">{errors.name}</p>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.name}</p>
             )}
           </div>
 
@@ -141,13 +141,13 @@ function Register() {
               Email address
             </label>
             <input
-              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.email ? "border-red-400 bg-red-50" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.email ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             {errors.email && (
-              <p className="mt-2 text-sm text-red-600">{errors.email}</p>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.email}</p>
             )}
           </div>
 
@@ -165,7 +165,7 @@ function Register() {
               </button>
             </div>
             <input
-              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.password ? "border-red-400 bg-red-50" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.password ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
               type={showPassword ? "text" : "password"}
               placeholder="Create a password"
               value={password}
@@ -173,7 +173,7 @@ function Register() {
             />
             <div className="mt-2 flex items-center justify-between text-sm">
               {errors.password ? (
-                <p className="text-red-600">{errors.password}</p>
+                <p className="text-red-600 dark:text-red-400">{errors.password}</p>
               ) : (
                 <p className="text-slate-500 dark:text-slate-400">Use at least 6 characters.</p>
               )}
@@ -197,19 +197,19 @@ function Register() {
               </button>
             </div>
             <input
-              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.confirmPassword ? "border-red-400 bg-red-50" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${errors.confirmPassword ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
               type={showConfirmPassword ? "text" : "password"}
               placeholder="Re-enter your password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
             {errors.confirmPassword && (
-              <p className="mt-2 text-sm text-red-600">{errors.confirmPassword}</p>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.confirmPassword}</p>
             )}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-300">
           Your account will be ready to track applications, interviews, offers, and rejections right after sign-up.
         </div>
 

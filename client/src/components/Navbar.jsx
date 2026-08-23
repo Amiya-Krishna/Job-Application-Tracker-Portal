@@ -72,7 +72,7 @@ function Navbar() {
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 isActive(link.to)
                   ? "bg-slate-950 text-white"
-                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               }`}
             >
               {link.label}
@@ -87,7 +87,7 @@ function Navbar() {
               className={`flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition ${
                 isEngineActive
                   ? "bg-slate-950 text-white"
-                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               }`}
             >
               Engine
@@ -110,7 +110,7 @@ function Navbar() {
                     className={`block rounded-xl px-3 py-2 text-sm font-semibold transition ${
                       isActive(link.to)
                         ? "bg-slate-950 text-white"
-                        : "text-slate-700 dark:text-slate-200 hover:bg-slate-100"
+                        : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                     }`}
                   >
                     {link.label}
@@ -134,7 +134,7 @@ function Navbar() {
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 isActive(link.to)
                   ? "bg-slate-950 text-white"
-                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               }`}
             >
               {link.label}
@@ -152,7 +152,7 @@ function Navbar() {
 
           <button
             onClick={logout}
-            className="ml-1 rounded-full border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            className="ml-1 rounded-full border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition hover:border-red-200 dark:hover:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:hover:text-red-400"
           >
             Logout
           </button>
@@ -188,7 +188,7 @@ function Navbar() {
                 className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${
                   isActive(link.to)
                     ? "bg-slate-950 text-white"
-                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
                 {link.label}
@@ -196,7 +196,7 @@ function Navbar() {
             ))}
             <button
               onClick={logout}
-              className="rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+              className="rounded-xl px-4 py-2.5 text-left text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
             >
               Logout
             </button>

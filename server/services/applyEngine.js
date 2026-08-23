@@ -103,12 +103,34 @@ async function prepareApplication(job, profile, browserContext) {
 }
 
 async function setStatus(jobId, status, logExtra = {}) {
+  // BUG FIX (P0 — apply worker JSONB failure): the VALUES() clause below
+  // used to bind $3 with no cast at all — only the UPDATE branch's `||`
+  // concatenation had an explicit `::jsonb` cast. $queryRawUnsafe sends
+  // JS strings (JSON.stringify(logExtra) is always a string) as a plain
+  // `text`-typed parameter unless the SQL tells Postgres otherwise, and
+  // Postgres won't implicitly convert text -> jsonb on INSERT — hence
+  // "column playwright_log is of type jsonb but expression is of type
+  // text". Casting the VALUES-clause usage too (`$3::jsonb`) makes both
+  // occurrences of the parameter explicitly jsonb, matching the column's
+  // real type; `logExtra` (an array/object) is preserved as structured
+  // JSON, not double-encoded or flattened to a bare string.
+  // COALESCE guards a row created by applyRoutes.js's initial
+  // `applications` upsert (POST /api/applications/:jobId creates the row
+  // with only job_id/status — playwright_log starts out NULL there).
+  // Postgres's jsonb `||` concatenation returns NULL if either side is
+  // NULL, which would otherwise silently discard this update's log
+  // entry instead of merging into it. Default is `'{}'::jsonb` (an empty
+  // object), not an array — `logExtra` is always object-shaped here
+  // ({reason}, {filled, skipped}, ...) and jsonb `||` between two
+  // objects merges keys, which is the accumulating-fields behavior this
+  // was written for; `'[]'::jsonb` would instead wrap each update as an
+  // array element, changing that semantics.
   await query(
     `INSERT INTO applications (job_id, status, playwright_log, retry_count)
-     VALUES ($1, $2, $3, 0)
+     VALUES ($1, $2, $3::jsonb, 0)
      ON CONFLICT (job_id) DO UPDATE
        SET status = $2,
-           playwright_log = applications.playwright_log || $3::jsonb,
+           playwright_log = COALESCE(applications.playwright_log, '{}'::jsonb) || $3::jsonb,
            retry_count = CASE WHEN $2 = 'failed' THEN applications.retry_count + 1 ELSE applications.retry_count END`,
     [jobId, status, JSON.stringify(logExtra)],
   );

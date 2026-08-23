@@ -1,6 +1,10 @@
 const { Worker } = require("bullmq");
 const { connection } = require("../queue");
-const { query } = require("@prisma/client");
+// BUG FIX (P1 — analytics worker "query is not a function"): same root
+// cause as the earlier learningService.js bug — `@prisma/client` has no
+// `query` export, so this was always `undefined`. `../lib/prisma`
+// exports the correctly wrapped `$queryRawUnsafe`-based `query` helper.
+const { query } = require("../lib/prisma");
 
 const ROLLUP_SQL = `
   INSERT INTO analytics_daily (day, jobs_scraped, jobs_matched, applications_sent, responses, response_rate_pct, refreshed_at)

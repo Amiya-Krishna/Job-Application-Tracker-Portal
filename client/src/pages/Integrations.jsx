@@ -132,7 +132,7 @@ function Integrations() {
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
         <button
           onClick={() => navigate("/dashboard")}
-          className="mb-6 text-sm font-semibold text-slate-500 dark:text-slate-400 transition hover:text-slate-800"
+          className="mb-6 text-sm font-semibold text-slate-500 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
         >
           ← Back to dashboard
         </button>

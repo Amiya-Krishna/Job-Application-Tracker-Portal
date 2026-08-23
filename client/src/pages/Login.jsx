@@ -104,13 +104,13 @@ function Login() {
               Email address
             </label>
             <input
-              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 ${errors.email ? "border-red-400 bg-red-50" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 ${errors.email ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             {errors.email && (
-              <p className="mt-2 text-sm text-red-600">{errors.email}</p>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.email}</p>
             )}
           </div>
 
@@ -128,14 +128,14 @@ function Login() {
               </button>
             </div>
             <input
-              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 ${errors.password ? "border-red-400 bg-red-50" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 ${errors.password ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
               type={showPassword ? "text" : "password"}
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
             {errors.password && (
-              <p className="mt-2 text-sm text-red-600">{errors.password}</p>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.password}</p>
             )}
             <div className="mt-2 text-right">
               <Link

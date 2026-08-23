@@ -180,7 +180,7 @@ function MatchedJobs() {
                         href={job.source_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-semibold text-cyan-700 hover:underline"
+                        className="text-xs font-semibold text-cyan-700 dark:text-cyan-400 hover:underline"
                       >
                         View posting ↗
                       </a>

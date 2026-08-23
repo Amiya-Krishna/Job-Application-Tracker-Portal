@@ -147,7 +147,7 @@ function JobForm() {
       <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
         <button
           onClick={() => navigate("/dashboard")}
-          className="mb-6 text-sm font-semibold text-slate-500 dark:text-slate-400 transition hover:text-slate-800"
+          className="mb-6 text-sm font-semibold text-slate-500 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200"
         >
           ← Back to dashboard
         </button>
@@ -232,7 +232,7 @@ function JobForm() {
                   <input
                     className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 ${
                       errors.company
-                        ? "border-red-400 bg-red-50"
+                        ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30"
                         : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                     }`}
                     placeholder="e.g. Google"
@@ -240,7 +240,7 @@ function JobForm() {
                     onChange={handleChange("company")}
                   />
                   {errors.company && (
-                    <p className="mt-2 text-sm text-red-600">
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
                       {errors.company}
                     </p>
                   )}
@@ -253,7 +253,7 @@ function JobForm() {
                   <input
                     className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 ${
                       errors.role
-                        ? "border-red-400 bg-red-50"
+                        ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30"
                         : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
                     }`}
                     placeholder="e.g. Frontend Developer"
@@ -261,7 +261,7 @@ function JobForm() {
                     onChange={handleChange("role")}
                   />
                   {errors.role && (
-                    <p className="mt-2 text-sm text-red-600">{errors.role}</p>
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.role}</p>
                   )}
                 </div>
               </div>

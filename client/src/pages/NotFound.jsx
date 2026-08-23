@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_#dbeafe_0%,_#f8fafc_45%,_#eff6ff_100%)] px-4 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_#dbeafe_0%,_#f8fafc_45%,_#eff6ff_100%)] dark:bg-[radial-gradient(circle_at_top,_#1e293b_0%,_#0f172a_45%,_#020617_100%)] px-4 text-center">
       <span className="inline-flex rounded-full bg-cyan-100 px-4 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-800">
         404
       </span>

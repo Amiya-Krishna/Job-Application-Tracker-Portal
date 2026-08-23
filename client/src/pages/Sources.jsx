@@ -68,7 +68,7 @@ function Sources() {
                           href={s.baseUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-cyan-700 hover:underline"
+                          className="text-xs text-cyan-700 dark:text-cyan-400 hover:underline"
                         >
                           {s.baseUrl}
                         </a>

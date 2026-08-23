@@ -52,7 +52,7 @@ function ForgotPassword() {
     >
       {sent ? (
         <div className="max-w-xl space-y-5">
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-4 text-sm text-emerald-900 dark:text-emerald-300">
             If an account exists for <strong>{email}</strong>, a reset link is on its way.
             Check your inbox (and spam folder).
           </div>
@@ -70,12 +70,12 @@ function ForgotPassword() {
               Email address
             </label>
             <input
-              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100 ${error ? "border-red-400 bg-red-50" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
+              className={`w-full rounded-2xl border px-4 py-3 text-slate-900 dark:text-slate-100 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100 ${error ? "border-red-400 dark:border-red-500/60 bg-red-50 dark:bg-red-950/30" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"}`}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
           </div>
 
           <button

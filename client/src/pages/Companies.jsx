@@ -81,7 +81,7 @@ function Companies() {
                   {companies.map((c) => (
                     <tr
                       key={c.id}
-                      className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60"
+                      className="border-b border-slate-50 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/60"
                     >
                       <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">{c.name}</td>
                       <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.domain || "—"}</td>

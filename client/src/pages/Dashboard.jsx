@@ -185,7 +185,7 @@ function Dashboard() {
 
         {/* ANALYTICS CARDS */}
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <StatCard title="Total" value={analytics.total} accent="text-slate-900" />
+          <StatCard title="Total" value={analytics.total} accent="text-slate-900 dark:text-slate-100" />
           <StatCard title="Applied" value={analytics.applied} accent="text-amber-600" />
           <StatCard title="Interview" value={analytics.interview} accent="text-blue-600" />
           <StatCard title="Offer" value={analytics.offer} accent="text-emerald-600" />
@@ -267,7 +267,7 @@ function Dashboard() {
                     {filteredJobs.map((job) => {
                       const style = STATUS_STYLES[job.status] || STATUS_STYLES.Applied;
                       return (
-                        <tr key={job.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+                        <tr key={job.id} className="border-b border-slate-50 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/60">
                           <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">
                             {job.company}
                           </td>
@@ -313,7 +313,7 @@ function Dashboard() {
                               ) : (
                                 <button
                                   onClick={() => setConfirmDeleteId(job.id)}
-                                  className="rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+                                  className="rounded-xl border border-rose-200 dark:border-rose-900/50 px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 transition hover:bg-rose-50 dark:hover:bg-rose-950/40"
                                 >
                                   Delete
                                 </button>

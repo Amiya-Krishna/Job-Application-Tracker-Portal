@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api";
 import Navbar from "../components/Navbar";
 import toast from "react-hot-toast";
@@ -93,6 +94,25 @@ function EngineApplications() {
           dashboard.
         </p>
 
+        {/* UX: Applied Jobs (see client/src/pages/AppliedJobs.jsx) is the
+            single, primary place users should track applications — it
+            already folds each engine application's status into the same
+            unified list (see the "engine: ..." badge there, sourced from
+            appliedJobsService.js). This page is a technical/legacy view
+            of the apply-engine's own raw queue — kept live (it's also
+            the only UI that can call the submit/outcome endpoints below)
+            but no longer linked from the main nav. */}
+        <div className="mt-4 flex items-center gap-2 rounded-2xl border border-cyan-200 dark:border-cyan-900/50 bg-cyan-50 dark:bg-cyan-950/30 px-4 py-3 text-sm text-cyan-900 dark:text-cyan-300">
+          <span>
+            This is a technical view of the raw apply-engine queue. For your
+            unified application list, see{" "}
+          </span>
+          <Link to="/applied-jobs" className="font-semibold underline hover:no-underline">
+            Applied Jobs
+          </Link>
+          <span>.</span>
+        </div>
+
         <div className="mt-6 flex flex-wrap gap-2">
           {STATUS_FILTERS.map((s) => (
             <button
@@ -150,7 +170,7 @@ function EngineApplications() {
                       </span>
                     )}
                     {app.failure_reason && (
-                      <span className="text-xs font-semibold text-rose-600">
+                      <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">
                         {app.failure_reason}
                       </span>
                     )}
@@ -172,21 +192,21 @@ function EngineApplications() {
                       <button
                         onClick={() => recordOutcome(app.id, "interview")}
                         disabled={busyId === app.id}
-                        className="rounded-xl border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                        className="rounded-xl border border-blue-200 dark:border-blue-900/50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-400 transition hover:bg-blue-50 dark:hover:bg-blue-950/40 disabled:opacity-50"
                       >
                         Interview
                       </button>
                       <button
                         onClick={() => recordOutcome(app.id, "offer")}
                         disabled={busyId === app.id}
-                        className="rounded-xl border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
+                        className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 transition hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-50"
                       >
                         Offer
                       </button>
                       <button
                         onClick={() => recordOutcome(app.id, "rejected")}
                         disabled={busyId === app.id}
-                        className="rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                        className="rounded-xl border border-rose-200 dark:border-rose-900/50 px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400 transition hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50"
                       >
                         Rejected
                       </button>

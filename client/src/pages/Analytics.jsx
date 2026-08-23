@@ -162,7 +162,7 @@ function Analytics() {
               Scraped → matched → applied → interview → offer.
             </p>
 
-            <div className="mt-4 h-72">
+            <div className="mt-4 h-72 text-slate-500 dark:text-slate-400">
               {isLoading ? (
                 <div className="h-full animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
               ) : funnelData.every((d) => d.value === 0) ? (
@@ -179,7 +179,14 @@ function Analytics() {
                       width={80}
                       tickLine={false}
                       axisLine={false}
-                      tick={{ fontSize: 12, fill: "#475569" }}
+                      // currentColor + the wrapping div's text-slate-500
+                      // dark:text-slate-400 (above) is how Recharts SVG
+                      // text picks up Tailwind's dark: variant — a
+                      // hardcoded hex fill can't respond to the .dark
+                      // class toggle at all, which is why these labels
+                      // used to stay a fixed slate-600 (#475569) even in
+                      // dark mode instead of lightening for contrast.
+                      tick={{ fontSize: 12, fill: "currentColor" }}
                     />
                     <Tooltip cursor={{ fill: "rgba(148,163,184,0.1)" }} />
                     <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={22}>
@@ -198,7 +205,7 @@ function Analytics() {
   );
 }
 
-function StatCard({ title, value, accent = "text-slate-900", loading }) {
+function StatCard({ title, value, accent = "text-slate-900 dark:text-slate-100", loading }) {
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm sm:p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">

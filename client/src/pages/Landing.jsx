@@ -21,7 +21,7 @@ const features = [
 
 function Landing() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#dbeafe_0%,_#f8fafc_45%,_#eff6ff_100%)]">
+    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#dbeafe_0%,_#f8fafc_45%,_#eff6ff_100%)] dark:bg-[radial-gradient(circle_at_top,_#1e293b_0%,_#0f172a_45%,_#020617_100%)]">
       <div className="absolute inset-0 opacity-60">
         <div className="absolute -left-20 top-16 h-64 w-64 rounded-full bg-cyan-200/50 blur-3xl" />
         <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-blue-300/40 blur-3xl" />
@@ -42,7 +42,7 @@ function Landing() {
           <div className="flex items-center gap-2">
             <Link
               to="/login"
-              className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 transition hover:bg-white/60"
+              className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 transition hover:bg-white/60 dark:hover:bg-slate-800/60"
             >
               Log in
             </Link>

@@ -12,6 +12,9 @@ const SOURCE_LABELS = {
   manual: "Manual",
   extension: "Extension",
   gmail: "Gmail",
+  linkedin: "LinkedIn",
+  indeed: "Indeed",
+  engine: "Engine",
 };
 
 const STATUS_STYLES = {
@@ -25,6 +28,14 @@ const SOURCE_STYLES = {
   manual: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   extension: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
   gmail: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+  // Added alongside the Engine Job → Applied Jobs fix: applying to an
+  // Engine Job now creates a TrackedJob whose sourceName is the engine
+  // job's actual source (linkedin/indeed) or "engine" as a fallback, so
+  // these badges are now genuinely reachable here for the first time —
+  // matches the same palette StateViews.jsx's SourceBadge already uses.
+  linkedin: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  indeed: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+  engine: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
 };
 
 function scoreStyle(score) {

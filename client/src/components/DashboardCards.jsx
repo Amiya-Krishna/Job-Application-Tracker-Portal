@@ -30,11 +30,11 @@ function DashboardCards() {
           className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow"
         >
 
-          <h2 className="text-gray-500">
+          <h2 className="text-gray-500 dark:text-slate-400">
             {card.title}
           </h2>
 
-          <p className="text-3xl font-bold text-blue-600 mt-2">
+          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">
             {card.value}
           </p>
 

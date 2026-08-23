@@ -57,6 +57,15 @@ model TrackedJob {
 
   @@index([userId, applicationDate(sort: Desc)], map: "idx_tracked_jobs_user_application_date")
   @@index([userId], map: "idx_tracked_jobs_user_id")
+  // BUG FIX (Applied Jobs / Engine Job apply flow): applying to an Engine
+  // Job (POST /api/applications/:jobId) needs to find-or-create exactly
+  // one TrackedJob per (user, engine job) so repeated clicks are
+  // idempotent instead of stacking up duplicate rows. NULLs are exempt
+  // from Postgres unique-constraint checks, so this only ever constrains
+  // rows that ARE bridged to an engine job — manual jobs (engineJobId
+  // null) are completely unaffected and can still have any number of
+  // rows per user.
+  @@unique([userId, engineJobId], map: "uq_tracked_jobs_user_engine_job")
 
   @@map("tracked_jobs")
 }

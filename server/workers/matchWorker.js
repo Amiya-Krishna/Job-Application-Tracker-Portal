@@ -19,11 +19,22 @@ const MATCH_THRESHOLD = 70;
 async function scoreJobForProfile(job, profile, corpus) {
   const result = scoreTfIdf(job, profile, corpus);
 
+  // BUG FIX (P0 — match worker JSONB failure): explanation is a `jsonb`
+  // column (schema.prisma: match_scores.explanation Json), but $5 was
+  // bound with no cast. $queryRawUnsafe sends JS strings (this is always
+  // a string — JSON.stringify(result.explanation)) as a plain
+  // `text`-typed parameter unless told otherwise in the SQL, and
+  // Postgres won't implicitly convert text -> jsonb — hence "column
+  // explanation is of type jsonb but expression is of type text".
+  // Casting both occurrences (VALUES and the UPDATE's SET) to `::jsonb`
+  // fixes it and keeps explanation's real shape ({matched_skills,
+  // missing_skills, similarity, skill_boost} — see matchingService.js)
+  // stored as structured JSON, not a double-encoded string.
   await query(
     `INSERT INTO match_scores (job_id, profile_id, method, score, explanation)
-     VALUES ($1,$2,$3,$4,$5)
+     VALUES ($1,$2,$3,$4,$5::jsonb)
      ON CONFLICT (job_id, profile_id, method) DO UPDATE
-       SET score = $4, explanation = $5, scored_at = now()`,
+       SET score = $4, explanation = $5::jsonb, scored_at = now()`,
     [
       job.id,
       profile.id,

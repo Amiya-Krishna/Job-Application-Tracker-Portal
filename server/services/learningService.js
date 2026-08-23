@@ -1,4 +1,11 @@
-const { query } = require("@prisma/client");
+// BUG FIX: this imported `query` from `@prisma/client`, which has no such
+// export — it was always `undefined`, so every call in this file threw
+// "query is not a function" the moment an outcome with a learning signal
+// (interview/offer/rejected) was recorded, breaking POST
+// /api/applications/:id/outcome for those statuses. `../lib/prisma`
+// exports the correctly wrapped `$queryRawUnsafe`-based `query` helper
+// (see its own header comment for why) — use that instead.
+const { query } = require("../lib/prisma");
 
 const OUTCOME_WEIGHTS = {
   interview: 0.05,
@@ -46,8 +53,17 @@ async function updateWeightsFromOutcome(jobId, outcome) {
     weights[skill] = clamp(current + delta, MIN_WEIGHT, MAX_WEIGHT);
   }
 
+  // BUG FIX (same JSONB-cast class as match_scores.explanation /
+  // applications.playwright_log): skill_weights is a `jsonb` column
+  // (schema.prisma: user_profile.skill_weights Json), but $1 had no
+  // cast — $queryRawUnsafe binds JSON.stringify(weights) as plain
+  // `text`, which Postgres refuses to implicitly store into a jsonb
+  // column ("column skill_weights is of type jsonb but expression is of
+  // type text"). This path wasn't in the reported runtime logs yet, but
+  // it's the identical bug and would fail the instant an
+  // interview/offer/rejected outcome with matched skills is recorded.
   await query(
-    "UPDATE user_profile SET skill_weights = $1, updated_at = now() WHERE id = $2",
+    "UPDATE user_profile SET skill_weights = $1::jsonb, updated_at = now() WHERE id = $2",
     [JSON.stringify(weights), profileId],
   );
 
