@@ -9,8 +9,13 @@ const prisma = require("../../lib/prisma");
 const { ingestJob } = require("../ingestionService");
 const linkedin = require("../../adapters/linkedinJobsAdapter");
 const indeed = require("../../adapters/indeedJobsAdapter");
+const remotive = require("../../adapters/remotiveJobsAdapter");
 
-const ADAPTERS = { linkedin, indeed };
+// remotive is a genuinely functional, no-auth provider (public API — see
+// adapters/remotiveJobsAdapter.js). linkedin/indeed remain registered so
+// the UI can still show their honest "unavailable" status until real
+// partner credentials exist — see those adapters for why.
+const ADAPTERS = { linkedin, indeed, remotive };
 
 async function runDiscovery({ scrapeRunId, query, location, sources, limit }) {
   await prisma.scrapeRun.update({

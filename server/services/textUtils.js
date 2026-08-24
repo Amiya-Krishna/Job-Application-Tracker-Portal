@@ -30,4 +30,34 @@ function titleSimilarity(a, b) {
   return natural.JaroWinklerDistance(normalize(a), normalize(b), {});
 }
 
-module.exports = { normalize, tokenize, contentHash, titleSimilarity, STOPWORDS };
+// Strips HTML markup from third-party job descriptions (e.g. Remotive's API
+// returns descriptions as an HTML fragment) before they're stored/ingested.
+// Deliberately dependency-free (regex-based, not a DOM/HTML parser) — this
+// app has no HTML sanitizer library installed and descriptions are only
+// ever stored as plain text and read back as text (never rendered with
+// dangerouslySetInnerHTML), so a full parser would be overkill. Block-level
+// tags are converted to newlines first so paragraphs/list items don't run
+// together into one unreadable line once tags are stripped.
+function stripHtml(html = "") {
+  if (typeof html !== "string" || !html) return "";
+  return html
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;/gi, "'")
+    .replace(/&rsquo;/gi, "\u2019")
+    .replace(/&ldquo;/gi, "\u201c")
+    .replace(/&rdquo;/gi, "\u201d")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+module.exports = { normalize, tokenize, contentHash, titleSimilarity, stripHtml, STOPWORDS };

@@ -4,8 +4,11 @@ const prisma = require("../lib/prisma");
 // Sources that represent the shared/global scraped catalog. These are
 // genuinely discovered by the scraper on behalf of every user, so their
 // count is the global engine `jobs` count for that source — the same
-// meaning as before this fix.
-const GLOBAL_ENGINE_SOURCES = new Set(["linkedin", "indeed"]);
+// meaning as before this fix. Remotive joins this set for the same reason
+// linkedin/indeed are here: it's a discovery-run source ingested into the
+// shared `jobs` table, not a per-user tracked source (see
+// adapters/remotiveJobsAdapter.js).
+const GLOBAL_ENGINE_SOURCES = new Set(["linkedin", "indeed", "remotive"]);
 
 // GET /api/sources -> browses the `job_sources` table (LinkedIn, Indeed,
 // Manual, Gmail, Extension — see seedSources.js for the full set), with a

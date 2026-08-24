@@ -11,6 +11,7 @@ const REQUIRED_SOURCES = [
   { name: "manual", base_url: null },
   { name: "linkedin", base_url: "https://www.linkedin.com" },
   { name: "indeed", base_url: "https://www.indeed.com" },
+  { name: "remotive", base_url: "https://remotive.com" },
   { name: "gmail", base_url: null },
   { name: "extension", base_url: null },
 ];

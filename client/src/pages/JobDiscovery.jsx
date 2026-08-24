@@ -6,15 +6,25 @@ import toast from "react-hot-toast";
 
 // Matches the real backend contract in server/routes/scrapeRoutes.js —
 // nothing here is invented. POST /api/scrape/run body:
-//   { query, location, sources: ["linkedin","indeed"], limit }
+//   { query, location, sources: ["remotive","linkedin","indeed"], limit }
 // -> { status: "queued", runId, sources }
 // GET /api/scrape/runs/:id -> { data: ScrapeRun }
 //   ScrapeRun.status: queued | running | succeeded | failed | blocked
 //   ScrapeRun.results: { [sourceName]: { status, message, found, ingested } }
+//
+// Provider honesty: Remotive (server/adapters/remotiveJobsAdapter.js) is a
+// free, no-auth public API and actually returns real remote listings today
+// — it's on by default. LinkedIn and Indeed have no public self-serve
+// search API; those adapters report "unavailable" until this app is
+// registered as an official partner (see linkedinJobsAdapter.js /
+// indeedJobsAdapter.js), so they're off by default and labeled as such
+// rather than implied to work.
 const SOURCES = [
-  { value: "linkedin", label: "LinkedIn" },
-  { value: "indeed", label: "Indeed" },
+  { value: "remotive", label: "Remotive", note: "Real remote listings — no setup needed" },
+  { value: "linkedin", label: "LinkedIn", note: "Requires partner API credentials" },
+  { value: "indeed", label: "Indeed", note: "Requires partner API credentials" },
 ];
+const DEFAULT_SOURCES = ["remotive"];
 
 const RUN_STATUS_STYLES = {
   queued: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -116,7 +126,7 @@ function RunResultsSummary({ run }) {
 function JobDiscovery() {
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
-  const [sources, setSources] = useState(["linkedin", "indeed"]);
+  const [sources, setSources] = useState(DEFAULT_SOURCES);
   const [limit, setLimit] = useState(25);
 
   const [activeRun, setActiveRun] = useState(null);
@@ -240,10 +250,12 @@ function JobDiscovery() {
           Job discovery
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
-          Trigger a discovery run against LinkedIn and Indeed. Results are only
-          ever real listings a provider actually returned — if a provider
-          can't be reached compliantly, this page says so instead of faking
-          results. See{" "}
+          Currently searches real remote listings from Remotive's public API —
+          no setup required. LinkedIn and Indeed are listed too, but neither
+          offers a public self-serve search API, so those stay off unless
+          this app has official partner credentials configured; results are
+          only ever real listings a provider actually returned, never
+          fabricated. See{" "}
           <Link to="/matched-jobs" className="font-semibold text-cyan-700 dark:text-cyan-400 hover:underline">
             Matched Jobs
           </Link>{" "}
@@ -287,23 +299,36 @@ function JobDiscovery() {
               <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Providers
               </span>
-              <div className="mt-1.5 flex gap-2">
+              <div className="mt-1.5 flex flex-wrap gap-2">
                 {SOURCES.map((s) => (
                   <label
                     key={s.value}
-                    className={`flex cursor-pointer items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    className={`flex cursor-pointer flex-col gap-0.5 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
                       sources.includes(s.value)
                         ? "border-slate-950 dark:border-cyan-500 bg-slate-950 dark:bg-cyan-950 text-white dark:text-cyan-200"
                         : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={sources.includes(s.value)}
-                      onChange={() => toggleSource(s.value)}
-                    />
-                    {s.label}
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={sources.includes(s.value)}
+                        onChange={() => toggleSource(s.value)}
+                      />
+                      {s.label}
+                    </span>
+                    {s.note && (
+                      <span
+                        className={`text-[11px] font-normal normal-case ${
+                          sources.includes(s.value)
+                            ? "text-slate-300 dark:text-cyan-300/80"
+                            : "text-slate-400 dark:text-slate-500"
+                        }`}
+                      >
+                        {s.note}
+                      </span>
+                    )}
                   </label>
                 ))}
               </div>
