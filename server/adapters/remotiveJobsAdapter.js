@@ -30,19 +30,12 @@ async function fetchWithTimeout(url, timeoutMs) {
   }
 }
 
-// Remotive's `candidate_required_location` is a free-text field (e.g.
-// "USA", "Worldwide", "Europe", "UK, EU"), not a structured location — this
-// is a best-effort substring match on real returned data, never a
-// fabricated filter. Jobs explicitly marked open to anyone are always kept.
-function matchesLocation(job, locationFilter) {
-  if (!locationFilter) return true;
-  const jobLocation = (job.candidate_required_location || "").toLowerCase();
-  if (!jobLocation) return true; // don't drop jobs Remotive didn't tag
-  return (
-    jobLocation.includes(locationFilter) ||
-    jobLocation.includes("worldwide") ||
-    jobLocation.includes("anywhere")
-  );
+// Returns a valid Date, or null — never an Invalid Date object, which
+// would otherwise get sent to the `postedAt` timestamptz column as-is.
+function parseDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function mapJob(job) {
@@ -50,34 +43,47 @@ function mapJob(job) {
     title: job.title,
     company: job.company_name,
     description: stripHtml(job.description || ""),
-    location: job.candidate_required_location || "Remote",
-    // Remotive is remote-only by definition — every listing it returns is remote.
+    // Nullable in the schema (jobs.location, tracked_jobs.location) — a
+    // job Remotive didn't tag with a location gets null, not an invented
+    // "Remote" placeholder. (Every Remotive listing is remote by
+    // definition; that's reflected in `remoteType` below, not fabricated
+    // into `location`.)
+    location: job.candidate_required_location || null,
+    // Remotive is remote-only by definition — every listing it returns is
+    // remote. "remote" matches the value already used elsewhere in this
+    // app for this column (see docs/API_ENDPOINTS.md's ingest example and
+    // client/src/pages/MatchedJobs.jsx's rendering of `remote_type`).
     remoteType: "remote",
     sourceUrl: job.url,
     externalJobId: String(job.id),
-    postedAt: job.publication_date ? new Date(job.publication_date) : null,
+    postedAt: parseDate(job.publication_date),
   };
 }
 
-async function discover({ query, location, limit }) {
-  if (!query || !String(query).trim()) {
-    return {
-      source: "remotive",
-      status: "error",
-      message: "A search query is required.",
-      jobs: [],
-    };
-  }
-
+// `location` is part of the shared discover({ query, location, limit })
+// interface every adapter receives (see jobDiscovery/index.js), but this
+// adapter doesn't filter on it: Remotive's `candidate_required_location` is
+// free text, not structured data, and no other adapter in this codebase
+// implements location filtering — inventing filtering semantics here that
+// don't exist anywhere else in the Job Discovery contract would risk
+// silently discarding real, valid Remotive results. The parameter is
+// accepted for interface compatibility only.
+async function discover({ query, limit }) {
   const parsedLimit = Math.min(
     Math.max(Number(limit) || DEFAULT_LIMIT, 1),
     MAX_LIMIT,
   );
 
-  const params = new URLSearchParams({
-    search: String(query).trim(),
-    limit: String(parsedLimit),
-  });
+  // Remotive's search API doesn't require a `search` term (calling it with
+  // none just returns its general remote-jobs feed) — the same as
+  // linkedin/indeed's discover() doesn't itself require a non-empty query.
+  // The real enforcement point for "a query is required" is
+  // server/routes/scrapeRoutes.js, which already rejects an empty query
+  // before any adapter is ever called; re-validating it here would be
+  // inventing a restriction Remotive's own API doesn't have.
+  const trimmedQuery = query && String(query).trim() ? String(query).trim() : null;
+  const params = new URLSearchParams({ limit: String(parsedLimit) });
+  if (trimmedQuery) params.set("search", trimmedQuery);
   const url = `${REMOTIVE_API_URL}?${params.toString()}`;
 
   let response;
@@ -116,14 +122,34 @@ async function discover({ query, location, limit }) {
     };
   }
 
-  const rawJobs = Array.isArray(data?.jobs) ? data.jobs : [];
-  const locationFilter = location && String(location).trim()
-    ? String(location).trim().toLowerCase()
-    : null;
+  // A response that parses as JSON but isn't shaped the way this adapter
+  // expects (missing/non-array `jobs`) is a malformed/unexpected response,
+  // not "zero real results" — reporting it as `status: "ok"` would hide a
+  // real provider failure behind an innocent-looking empty search.
+  if (!Array.isArray(data?.jobs)) {
+    return {
+      source: "remotive",
+      status: "error",
+      message: "Remotive API response did not include the expected \"jobs\" array.",
+      jobs: [],
+    };
+  }
 
-  const jobs = rawJobs
-    .filter((j) => j && j.id != null && j.title && j.company_name && j.url)
-    .filter((j) => matchesLocation(j, locationFilter))
+  // Drop only genuinely incomplete records (never fabricate the missing
+  // piece) — `description` is required here too, not just id/title/
+  // company/url: jobs.description is NOT NULL in the schema, and an empty
+  // description would also be silently unscoreable by the TF-IDF matcher.
+  const jobs = data.jobs
+    .filter(
+      (j) =>
+        j &&
+        j.id != null &&
+        j.title &&
+        j.company_name &&
+        j.url &&
+        typeof j.description === "string" &&
+        j.description.trim(),
+    )
     .slice(0, parsedLimit)
     .map(mapJob);
 

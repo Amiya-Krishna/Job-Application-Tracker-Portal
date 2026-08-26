@@ -108,7 +108,7 @@ function Analytics() {
             accent="text-cyan-600"
           />
           <StatCard
-            title="Avg. response time"
+            title="Avg. response time (not available)"
             value={
               summary?.averageResponseTimeHours != null
                 ? `${summary.averageResponseTimeHours}h`
@@ -135,7 +135,7 @@ function Analytics() {
           <div className="rounded-[28px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Conversion</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Share of applications that advance to each stage.
+              Share of applications currently at each stage.
             </p>
 
             <div className="mt-5 space-y-4">

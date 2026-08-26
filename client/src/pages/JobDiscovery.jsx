@@ -15,14 +15,15 @@ import toast from "react-hot-toast";
 // Provider honesty: Remotive (server/adapters/remotiveJobsAdapter.js) is a
 // free, no-auth public API and actually returns real remote listings today
 // — it's on by default. LinkedIn and Indeed have no public self-serve
-// search API; those adapters report "unavailable" until this app is
-// registered as an official partner (see linkedinJobsAdapter.js /
-// indeedJobsAdapter.js), so they're off by default and labeled as such
-// rather than implied to work.
+// search API, and their adapters are unimplemented placeholders even when
+// a credential env var is set (see linkedinJobsAdapter.js's/
+// indeedJobsAdapter.js's "not implemented yet" placeholder) — so the copy
+// below says "not implemented," not just "needs credentials," to avoid
+// implying they'd start working the moment a token is added.
 const SOURCES = [
   { value: "remotive", label: "Remotive", note: "Real remote listings — no setup needed" },
-  { value: "linkedin", label: "LinkedIn", note: "Requires partner API credentials" },
-  { value: "indeed", label: "Indeed", note: "Requires partner API credentials" },
+  { value: "linkedin", label: "LinkedIn", note: "Not implemented — no official partner integration yet" },
+  { value: "indeed", label: "Indeed", note: "Not implemented — no official partner integration yet" },
 ];
 const DEFAULT_SOURCES = ["remotive"];
 
@@ -136,6 +137,7 @@ function JobDiscovery() {
   const [history, setHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState("");
+  const [removingRunId, setRemovingRunId] = useState(null);
 
   const pollRef = useRef(null);
 
@@ -149,6 +151,33 @@ function JobDiscovery() {
       setHistoryError(err.response?.data?.message || "Failed to load discovery history");
     } finally {
       setIsLoadingHistory(false);
+    }
+  };
+
+  // Removes one of the current user's own run-history entries (see
+  // DELETE /api/scrape/runs/:id in server/routes/scrapeRoutes.js — these
+  // rows are ScrapeRun history metadata, not job postings, so removing one
+  // never touches any imported/matched job). Mirrors the existing
+  // AppliedJobs.jsx removeJob() pattern: confirm, call the API, drop it
+  // from local state on success (no full reload), toast on either outcome.
+  const removeRun = async (run) => {
+    if (
+      !window.confirm(
+        `Remove this discovery run ("${run.query}") from your history? This won't affect any jobs already imported.`,
+      )
+    ) {
+      return;
+    }
+    setRemovingRunId(run.id);
+    try {
+      await api.delete(`/scrape/runs/${run.id}`);
+      setHistory((cur) => cur.filter((r) => r.id !== run.id));
+      if (activeRun?.id === run.id) setActiveRun(null);
+      toast.success("Removed");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to remove run");
+    } finally {
+      setRemovingRunId(null);
     }
   };
 
@@ -252,10 +281,9 @@ function JobDiscovery() {
         <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
           Currently searches real remote listings from Remotive's public API —
           no setup required. LinkedIn and Indeed are listed too, but neither
-          offers a public self-serve search API, so those stay off unless
-          this app has official partner credentials configured; results are
-          only ever real listings a provider actually returned, never
-          fabricated. See{" "}
+          offers a public self-serve search API and neither is implemented
+          yet, so those stay off by default; results are only ever real
+          listings a provider actually returned, never fabricated. See{" "}
           <Link to="/matched-jobs" className="font-semibold text-cyan-700 dark:text-cyan-400 hover:underline">
             Matched Jobs
           </Link>{" "}
@@ -434,7 +462,35 @@ function JobDiscovery() {
                         {(run.sources || []).join(", ")} · {formatDateTime(run.createdAt)}
                       </p>
                     </div>
-                    <RunStatusBadge status={run.status} />
+                    <div className="flex shrink-0 items-center gap-2">
+                      <RunStatusBadge status={run.status} />
+                      <button
+                        type="button"
+                        onClick={() => removeRun(run)}
+                        disabled={removingRunId === run.id}
+                        aria-label={`Remove discovery run "${run.query}" from your history`}
+                        title="Remove from history"
+                        className="rounded-xl p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-500 dark:hover:bg-rose-950 dark:hover:text-rose-400"
+                      >
+                        {removingRunId === run.id ? (
+                          <span className="block h-4 w-4 animate-pulse rounded-full bg-current opacity-40" />
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482 41.03 41.03 0 0 0-2.365-.298V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4Z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

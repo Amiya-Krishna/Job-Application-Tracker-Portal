@@ -7,9 +7,9 @@ function formatAnalyticsResponse(data, rangeDays) {
     meta: {
       rangeDays,
       computedFrom: [
-        "applications.applied_at",
-        "applications.outcome_updated_at",
-        "applications.status",
+        "tracked_jobs.application_date",
+        "tracked_jobs.status",
+        "scoped to the authenticated user",
       ],
     },
     data: {
@@ -30,11 +30,13 @@ function formatAnalyticsResponse(data, rangeDays) {
   };
 }
 
-// GET /api/analytics -> one-shot summary computed directly from Postgres.
+// GET /api/analytics -> one-shot summary computed directly from Postgres,
+// scoped to the authenticated user (see analyticsService.js's header
+// comment for the full multi-user-scoping root-cause explanation).
 router.get("/", async (req, res) => {
   try {
     const rangeDays = parseInt(req.query.range, 10) || 30;
-    const data = await getAnalyticsSummary(rangeDays);
+    const data = await getAnalyticsSummary(req.user.id, rangeDays);
     res.json(formatAnalyticsResponse(data, data.rangeDays));
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -44,14 +46,18 @@ router.get("/", async (req, res) => {
 router.get("/metrics", async (req, res) => {
   try {
     const rangeDays = parseInt(req.query.range, 10) || 30;
-    const data = await getAnalyticsSummary(rangeDays);
+    const data = await getAnalyticsSummary(req.user.id, rangeDays);
     res.json(formatAnalyticsResponse(data, data.rangeDays));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Legacy snapshot for dashboards that still expect the precomputed rollup model.
+// Legacy snapshot for dashboards that still expect the precomputed rollup
+// model. Not called by the current frontend (confirmed: no client code
+// references /analytics/summary) and analytics_daily is itself a genuinely
+// system-wide rollup table with no user dimension of its own (see
+// analyticsWorker.js) — left as-is, out of scope for this fix.
 router.get("/summary", async (req, res) => {
   try {
     const days = parseInt(req.query.range, 10) || 30;
@@ -75,18 +81,50 @@ router.get("/summary", async (req, res) => {
 });
 
 // GET /api/analytics/funnel -> scraped -> matched -> applied -> interview -> offer
+//
+// FIX (same multi-user-scoping root cause as "/" above): this used to
+// join the global `applications` table with no user filter at all, so
+// "applied"/"interview"/"offer" mixed in every user's engine activity.
+// - "scraped" stays a genuinely global count on purpose: `jobs` is the
+//   shared, deduplicated discovery catalog (see jobDiscovery service),
+//   not owned by any one user — "how many jobs has the engine found in
+//   total" is a real system-wide fact, not a per-user one.
+// - "matched" is scoped to jobs matched against THIS user's own profile
+//   (match_scores.profile_id -> user_profile.user_id), the same bridge
+//   already established and audited for match data elsewhere.
+// - "applied" is every row in this user's own tracked_jobs — that's the
+//   unambiguous, non-inferred definition of "the user applied" (creating
+//   a TrackedJob row IS what "applying" means in this app), regardless of
+//   its current status, unlike the old `status = 'applied'`-only filter
+//   which undercounted anything that had since moved on to Interview/
+//   Offer/Rejected.
+// - "interview"/"offer" use the same current-status-only definition as
+//   the Conversion section above, for the same documented reason (no
+//   guaranteed sequential progression to infer from).
 router.get("/funnel", async (req, res) => {
   try {
     const { rows } = await query(
-      `SELECT
-          count(*) FILTER (WHERE j.status != 'duplicate') AS scraped,
-          count(*) FILTER (WHERE ms.score >= 70) AS matched,
-          count(*) FILTER (WHERE a.status = 'applied') AS applied,
-          count(*) FILTER (WHERE a.status = 'interview') AS interview,
-          count(*) FILTER (WHERE a.status = 'offer') AS offer
-       FROM jobs j
-       LEFT JOIN match_scores ms ON ms.job_id = j.id AND ms.method = 'tfidf'
-       LEFT JOIN applications a ON a.job_id = j.id`,
+      `WITH catalog AS (
+          SELECT count(*) FILTER (WHERE j.status != 'duplicate') AS scraped
+          FROM jobs j
+       ),
+       matched AS (
+          SELECT count(DISTINCT ms.job_id) AS matched
+          FROM match_scores ms
+          JOIN user_profile up ON up.id = ms.profile_id
+          WHERE up.user_id = $1 AND ms.score >= 70
+       ),
+       tracked AS (
+          SELECT
+              count(*) AS applied,
+              count(*) FILTER (WHERE status = 'Interview') AS interview,
+              count(*) FILTER (WHERE status = 'Offer') AS offer
+          FROM tracked_jobs
+          WHERE user_id = $1
+       )
+       SELECT catalog.scraped, matched.matched, tracked.applied, tracked.interview, tracked.offer
+       FROM catalog, matched, tracked`,
+      [req.user.id],
     );
     res.json({ data: rows[0] });
   } catch (err) {
