@@ -1,6 +1,6 @@
 # Getting Started Guide
 
-Welcome to the Job Application Tracker Portal! This guide will help you set up and run the project in less than 10 minutes.
+Welcome to TrackTrail! This guide will help you set up and run the project.
 
 ---
 
@@ -8,10 +8,10 @@ Welcome to the Job Application Tracker Portal! This guide will help you set up a
 
 Before you start, ensure you have:
 
-- **Node.js** 16.x or higher ([Download](https://nodejs.org))
+- **Node.js** 18.x or higher ([Download](https://nodejs.org))
 - **npm** (comes with Node.js)
 - **A hosted PostgreSQL database** — e.g. [Neon](https://neon.tech), [Supabase](https://supabase.com), or Render Postgres. You just need a connection URL; there's nothing to install locally.
-- **A Redis instance** (for the background job queue used by the matching/apply/analytics engine) — local Redis, or a hosted one like Upstash
+- **A Redis instance** — required to run the background worker process (Job Discovery, matching, apply engine, analytics rollup). Local Redis, or a hosted one like Upstash. The core manual tracker (register, login, add/edit/delete jobs) works without Redis; the worker process won't start without it.
 - **Git** ([Download](https://git-scm.com))
 - A code editor (VSCode recommended)
 
@@ -29,7 +29,7 @@ git --version
 
 ```bash
 git clone <repository-url>
-cd "Job Application Tracker Portal"
+cd TrackTrail
 ```
 
 ---
@@ -63,22 +63,39 @@ cp .env.example .env
 DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 JWT_SECRET=your-secret-key-here
 PORT=5000
-CLIENT_URL=https://Automated-Job-Application-Tracking-System-with-Email-Ingestion-and-Analytics-Pipeline-ten.vercel.app,http://localhost:5173
+CLIENT_URL=http://localhost:5173
 ```
+
+Everything else in `.env.example` (Gmail, Playwright, Redis, Resend) is
+optional — those features stay disabled if left blank. See
+[INSTALLATION.md](INSTALLATION.md) for the full variable reference.
 
 ---
 
-## Step 4: Install Server Dependencies & Apply the Schema
+## Step 4: Install Server Dependencies & Set Up the Database
+
+This project uses **Prisma**, not a hand-written SQL schema file.
 
 ```bash
 npm install
-npm run db:migrate   # applies server/db/schema.sql to your Postgres database
+npx prisma generate       # generates the Prisma client from schema.prisma
+npx prisma migrate deploy # applies the committed migrations in prisma/migrations
 ```
 
-`db:migrate` creates every table the app needs — `users` and `tracked_jobs` for
-the auth/tracker portion, plus `jobs`, `companies`, `applications`,
-`match_scores`, `user_profile`, `job_sources`, and `analytics_daily` for the
-intelligent job-application engine. It's safe to re-run.
+`npx prisma migrate deploy` creates every table the app needs — `users` and
+`tracked_jobs` for the auth/tracker portion, plus `jobs`, `companies`,
+`applications`, `match_scores`, `user_profile`, `job_sources`, `scrape_runs`,
+and `analytics_daily` for the intelligent job-application engine. Safe to
+re-run.
+
+> **Note:** `npm run db:migrate` (`node migrate.js`) still exists in
+> `package.json` but is dead code left over from an earlier, pre-Prisma
+> version of this project — it reads a `db/schema.sql` file that no longer
+> exists in the repository and will fail if you run it. Use the Prisma
+> commands above instead.
+
+If you're actively developing and want to create a new migration from schema
+changes, use `npx prisma migrate dev` instead of `deploy`.
 
 ---
 
@@ -96,7 +113,7 @@ in `client/.env` (defaults to `http://localhost:5000` for local dev).
 
 ## Step 6: Start the Development Servers
 
-**Open two terminals:**
+**Open two or three terminals:**
 
 **Terminal 1 - Start Backend Server:**
 
@@ -108,8 +125,9 @@ npm start
 Expected output:
 
 ```
-Server Running on 5000
 Postgres connected
+job_sources seeded (manual/linkedin/indeed/gmail/extension)
+Server Running on 5000
 ```
 
 **Terminal 2 - Start Frontend Client:**
@@ -125,13 +143,17 @@ Expected output:
 ➜  Local:   http://localhost:5173/
 ```
 
-_(Optional)_ If you want the matching/apply/analytics engine running in the
-background, open a third terminal:
+**Terminal 3 (recommended) - Start the background workers:**
 
 ```bash
 cd server
 npm run worker
 ```
+
+This runs Job Discovery, matching, the apply engine, and analytics as BullMQ
+workers, separate from the API process. Requires Redis (`REDIS_URL`, or it
+falls back to `redis://127.0.0.1:6379`). Without this running, discovery runs
+you trigger from `/job-discovery` will stay `queued` forever.
 
 ---
 
@@ -144,6 +166,9 @@ http://localhost:5173
 ```
 
 You should see the landing page. Register a new account and start tracking!
+To try Job Discovery, go to `/job-discovery` and search — Remotive works out
+of the box with no extra setup; LinkedIn/Indeed will show as "unavailable"
+(see the README's Job Discovery section for why).
 
 ---
 
@@ -162,8 +187,9 @@ Expected: `Backend Running`
 - [ ] Login page loads
 - [ ] Can create a new account
 - [ ] Can log in
-- [ ] Can access dashboard
+- [ ] Can access the dashboard
 - [ ] Can add a job application
+- [ ] Can trigger a Job Discovery search against Remotive (if the worker is running)
 
 ---
 
@@ -184,6 +210,11 @@ Postgres connection error ...
 **Solution**: Double-check `DATABASE_URL` in `server/.env` — make sure it's
 the full URL from your provider (including `?sslmode=require` if it's included),
 and that the database is actually reachable from wherever you're running the server.
+
+### "Table does not exist" errors
+
+**Solution**: Run `npx prisma migrate deploy` (see Step 4) — the schema
+hasn't been applied to your database yet.
 
 ### Port Already in Use
 
@@ -229,8 +260,13 @@ Access to XMLHttpRequest has been blocked by CORS policy
 **Solution**: Ensure `.env` has correct `CLIENT_URL`:
 
 ```env
-CLIENT_URL=https://Automated-Job-Application-Tracking-System-with-Email-Ingestion-and-Analytics-Pipeline-ten.vercel.app,http://localhost:5173
+CLIENT_URL=http://localhost:5173
 ```
+
+### Job Discovery runs stay "queued" forever
+
+**Solution**: The worker process (`npm run worker`, Step 6) isn't running, or
+can't reach Redis. Check `REDIS_URL` in `.env`.
 
 ---
 
@@ -238,33 +274,35 @@ CLIENT_URL=https://Automated-Job-Application-Tracking-System-with-Email-Ingestio
 
 ```
 ├── server/
-│   ├── db/                  # Postgres pool + schema.sql
-│   ├── models/               # Postgres-backed User & Job models
-│   ├── routes/                # API endpoints
-│   ├── middleware/            # Auth middleware
-│   ├── services/, adapters/, workers/, queue/  # Matching/apply/analytics engine
-│   ├── server.js               # Entry point
+│   ├── prisma/                 # schema.prisma + migrations (Prisma, not raw SQL)
+│   ├── lib/                    # Shared Prisma client
+│   ├── routes/                 # API endpoints
+│   ├── middleware/             # Auth middleware
+│   ├── services/, adapters/, workers/, queue/  # Discovery/matching/apply/analytics engine
+│   ├── server.js                # Entry point
 │   └── package.json
 ├── client/
 │   ├── src/
-│   │   ├── components/       # UI components
-│   │   ├── pages/            # Page components
-│   │   ├── api.js            # Axios instance / API calls
-│   │   └── main.jsx          # Entry point
+│   │   ├── components/         # UI components
+│   │   ├── pages/               # Page components
+│   │   ├── api.js               # Axios instance / API calls
+│   │   └── main.jsx             # Entry point
 │   └── vite.config.js
-├── browser-extension/        # Chrome extension for manual job capture
+├── browser-extension/           # Manifest V3 Chrome extension
 └── docs/
 ```
+
+See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for the full breakdown.
 
 ---
 
 ## Next Steps
 
-1. **Explore the Dashboard** - Add some job applications
+1. **Explore the Dashboard** - Add some job applications, try Job Discovery
 2. **Read [API_ENDPOINTS.md](API_ENDPOINTS.md)** - Learn about API endpoints
 3. **Check [INSTALLATION.md](INSTALLATION.md)** - Detailed setup guide
 4. **Review Code** - Explore the codebase
-5. **Deploy** - Deploy to production when ready
+5. **Deploy** - Deploy to production when ready (see [DEPLOYMENT.md](DEPLOYMENT.md))
 
 ---
 
@@ -278,14 +316,14 @@ cd server && npm start
 # Terminal 2:
 cd client && npm run dev
 
-# Terminal 3 (optional, engine background workers):
+# Terminal 3 (background engine workers — recommended):
 cd server && npm run worker
 
 # Build for production
 cd client && npm run build
 
-# Apply/re-apply the Postgres schema
-cd server && npm run db:migrate
+# Apply Prisma migrations
+cd server && npx prisma migrate deploy
 
 # Install new package (from respective directory)
 npm install package-name

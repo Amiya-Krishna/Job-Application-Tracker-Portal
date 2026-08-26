@@ -15,11 +15,11 @@ dashboard: browse, search, filter, add, change status, and delete jobs.
 ## First-time setup
 
 1. Click the TrackTrail icon in your toolbar.
-2. Open **API settings** (gear icon, or the link on the login screen) and
-   confirm the Backend API URL matches your deployed Render URL (it
-   defaults to the one from this project — change it if you redeploy to a
-   different URL).
-3. Log in with the same email/password you use on the TrackTrail website.
+2. Log in with the same email/password you use on the TrackTrail website.
+   The extension talks to whatever backend URL is set as `DEFAULT_API_BASE_URL`
+   in `config.js` — there's no in-popup settings UI for changing it; if you
+   redeploy the backend elsewhere, edit that constant directly (see
+   "API settings — removed", below).
 
 ## What's in the popup now
 
@@ -62,10 +62,11 @@ update — check `detectLinkedIn()` / `detectIndeed()`.
 `status`, `applicationDate`, `interviewDate`, `notes`. There's no `link`/URL
 field on this model, so the popup doesn't send or display one.
 
-The backend also has a separate, bigger "intelligent apply engine" (job
-scraping, TF-IDF matching, auto-apply queue, analytics, profile) under
+The backend also has a separate, bigger "intelligent apply engine" (Job
+Discovery, TF-IDF matching, apply queue, analytics, profile) under
 `/api/engine/jobs`, `/api/applications`, `/api/analytics`, `/api/profile` —
-none of that is wired into the extension yet.
+the popup's Jobs/Add/Stats tabs above don't touch it, but the full dashboard
+(next section) does.
 
 ## Full dashboard (new)
 
@@ -85,29 +86,17 @@ room for it:
 - **Profile** — view/edit the resume/skills profile used for matching,
   via `/api/profile`.
 
-These engine routes don't have the `auth` middleware applied in the code
-you shared, so the dashboard calls them without a token. If you add auth
-to them later, the dashboard's `api()` helper in `dashboard.js` is the one
-place to add the `token` header.
+These engine routes require the same `token` auth header as everything else
+in this extension — `/api/engine/jobs`, `/api/applications`, `/api/analytics`,
+`/api/profile`, `/api/companies`, and `/api/sources` are all mounted with
+`auth` at the `app.use(...)` level in `server.js`, and the dashboard's
+`apiAuth()` helper in `dashboard.js` already attaches the stored token to
+every one of these calls.
 
-### Heads-up: BigInt JSON crash risk
-
-`jobs.id`, `applications.id`, and `applications.job_id` are Postgres
-`BigInt` in your Prisma schema, and I didn't find a
-`BigInt.prototype.toJSON` override anywhere in the project. Node's
-`JSON.stringify` (which `res.json()` uses) throws on raw `BigInt` values,
-so `GET /api/engine/jobs` and `GET /api/applications` will likely crash
-with `TypeError: Do not know how to serialize a BigInt` the first time
-they run. Fix: add this once near the top of `server.js`, before routes
-are mounted:
-
-```js
-BigInt.prototype.toJSON = function () {
-  return this.toString();
-};
-```
-
-
+`jobs.id`, `applications.id`, and similar Postgres `BigInt` columns are
+already handled: `server/lib/prisma.js` and `server.js` both add a
+`BigInt.prototype.toJSON` override before any route runs, so `res.json()`
+serializes them without throwing.
 
 If you want a shareable install link instead of "load unpacked": zip this
 folder's contents (not the folder itself) and submit it through the

@@ -154,11 +154,14 @@ const h = async (e, p) => {
 #### Backend (Node.js)
 
 This project keeps route logic directly in `routes/*.js` (there's no separate
-`controllers/` layer), and the `models/*.js` files are plain functions over a
-shared Postgres pool — not an ORM. Follow that pattern:
+`controllers/` layer) and uses **Prisma** as the ORM (`server/prisma/schema.prisma`,
+via the shared client in `server/lib/prisma.js`) — not raw `pg` queries or
+hand-written model files. Follow that pattern:
 
 ```javascript
 // ✅ Good — server/routes/jobRoutes.js style
+const prisma = require("../lib/prisma");
+
 router.post("/", auth, async (req, res) => {
   try {
     const { company, role, status, interviewDate, notes } = req.body;
@@ -167,13 +170,15 @@ router.post("/", auth, async (req, res) => {
       return res.status(400).json({ message: "company and role are required" });
     }
 
-    const job = await Job.create({
-      userId: req.user.id,
-      company,
-      role,
-      status,
-      interviewDate,
-      notes,
+    const job = await prisma.trackedJob.create({
+      data: {
+        userId: req.user.id,
+        company,
+        role,
+        status,
+        interviewDate,
+        notes,
+      },
     });
 
     res.json(job);
@@ -182,13 +187,18 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-// ❌ Bad
+// ❌ Bad — don't bypass Prisma with a raw pg query for something this simple,
+// and don't forget to scope by req.user.id on user-owned tables
 router.post("/", (req, res) => {
-  const j = new Job(req.body);
-  j.save();
-  res.json(j);
+  pool.query("INSERT INTO tracked_jobs (company, role) VALUES ($1, $2)", [req.body.company, req.body.role]);
+  res.json({ ok: true });
 });
 ```
+
+For aggregate/analytics-style queries where Prisma's query builder is
+awkward, this codebase uses `prisma.$queryRawUnsafe` via the `query()` helper
+exported from `server/lib/prisma.js` (see `services/analyticsService.js` for
+an example) rather than reaching for a separate `pg` pool.
 
 ### 5. Test Your Changes
 

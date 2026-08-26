@@ -2,14 +2,28 @@
 ### System Design — upgrade path from TrackTrail (current: Node/Express + PostgreSQL + browser extension)
 
 > **Note on your current stack vs. this design:** the repo now runs Express 5
-> on a single hosted PostgreSQL database — the original Mongo/Mongoose
-> auth+tracker layer has been migrated over (see "Migration Notes" at the
-> bottom, updated to reflect what's actually done). A browser extension
-> (`content.js`) still does the LinkedIn/Indeed manual capture, feeding the
-> same `/api/ingest` entrypoint this doc designs for the Playwright scraper.
-> The rest of this document describes the *target* engine (matching, dedup,
-> semi-automated apply, analytics) built on top of that now-unified Postgres
-> database.
+> on a single hosted PostgreSQL database, accessed via **Prisma** (not raw
+> `pg` model files — see "Migration Notes" at the bottom, updated to reflect
+> what's actually done). The engine described in this document has since
+> been substantially implemented: dedup, TF-IDF matching, the human-in-the-
+> loop Playwright apply flow, the learning loop, and live per-user analytics
+> all exist in the current codebase — see the README for what's actually
+> running today versus what below is still aspirational design.
+>
+> **Important correction on ingestion sources:** the "Playwright Scrapers
+> (LinkedIn, Indeed)" shown below as the primary ingestion path were never
+> wired into the active pipeline. The feature that actually shipped — Job
+> Discovery — uses **Remotive's public API** (no scraping, no anti-bot
+> workarounds) as its one real, working provider; LinkedIn/Indeed adapters
+> exist but honestly report "unavailable," since neither platform offers a
+> public search API and this project deliberately does not scrape them. A
+> standalone script matching the design below (`server/services/scraper.js`)
+> does exist in the repo with real LinkedIn/Indeed DOM-scraping code, but it
+> is not invoked by any worker or route — it predates the Remotive-based
+> redesign and was left in place, disconnected, rather than deleted. See the
+> README's "Job Discovery" and "Known Limitations" sections. A browser
+> extension (`content.js`) still does manual capture, feeding the same
+> `/api/ingest` entrypoint as Job Discovery.
 
 ---
 
@@ -198,6 +212,20 @@ On duplicate: insert the new row anyway (for audit/history — you still want to
 
 Store this as a materialized view (`analytics_daily`) refreshed by the worker rather than computing it live on every dashboard load — at low volume it doesn't matter, but it's the right answer when asked "how would this scale."
 
+> **What actually shipped:** the live dashboard (`GET /api/analytics`) computes
+> conversion/response metrics directly from `tracked_jobs`, scoped to the
+> authenticated user, on every request — not from this materialized view.
+> `analytics_daily` and its worker still exist and still run, but as a
+> separate, genuinely system-wide (no per-user dimension) rollup that the
+> current frontend doesn't read from. The reasoning: a shared daily rollup
+> has no way to answer "this user's own conversion rate" without adding a
+> user dimension to it, and at this project's scale a live per-user query
+> is cheap enough that doing so directly was simpler than extending the
+> rollup. Also note: current conversion metrics reflect each application's
+> *current* status only — `tracked_jobs` has no stage-history log, so
+> "Applied → Interview" means "currently at Interview," not "ever reached
+> Interview." See the README's Analytics section for the full accounting.
+
 **API endpoints:**
 ```
 GET  /api/engine/jobs?status=matched&minScore=70&page=1
@@ -238,11 +266,17 @@ This is simple enough to explain end-to-end in an interview (it's essentially a 
 
 ## Migration Notes from Your Current TrackTrail Repo
 
-1. **MongoDB → PostgreSQL: done.** `users` and `tracked_jobs` tables now live
-   in `db/schema.sql` alongside the engine tables, and `models/User.js` /
-   `models/Job.js` are plain functions over the shared `pg` pool instead of
-   Mongoose schemas — there's a single database for the whole app now, not a
+1. **MongoDB → PostgreSQL: done, and since migrated again onto Prisma.**
+   `users` and `tracked_jobs` (plus every engine table) now live in
+   `server/prisma/schema.prisma`, applied via `npx prisma migrate deploy` —
+   there's no hand-written `db/schema.sql` and no `models/User.js` /
+   `models/Job.js` plain-function layer in the current codebase; route
+   handlers call `prisma.<model>.<method>()` directly (see
+   `server/lib/prisma.js`). Single database for the whole app, not a
    dual-write or a long-term Mongo/Postgres split.
-2. **Browser extension stays** — repurpose it as one of the two ingestion paths (manual capture) alongside the new Playwright scheduled scraper, both writing through the same normalization/dedup entrypoint.
-3. **Auth (JWT + bcrypt, already in `authRoutes.js`)** carries over as-is; it's orthogonal to this redesign — only its storage layer changed (Postgres instead of Mongo).
-4. **Remaining pieces to build, in rough priority order for a 2–4 week build:** dedup logic → TF-IDF matcher → analytics endpoints → Playwright apply skeleton (generic adapter only, skip per-ATS adapters until the core loop works) → learning loop last, since it depends on having real outcome data to be meaningful. (The Postgres schema/migration step that used to head this list is already in place.)
+2. **Browser extension stays** — it does manual capture, feeding the same
+   `/api/ingest` entrypoint that Job Discovery's Remotive adapter also feeds
+   (not the Playwright scraper shown in the diagram above — see the
+   correction note at the top of this document).
+3. **Auth (JWT + bcrypt, already in `authRoutes.js`)** carries over as-is; it's orthogonal to this redesign — only its storage layer changed (Postgres via Prisma instead of Mongo).
+4. **What's actually been built since this doc was written:** dedup logic, the TF-IDF matcher, live per-user analytics endpoints, the Playwright apply flow (generic + Greenhouse adapters, human-in-the-loop, never auto-submits), the learning loop, and an async Job Discovery pipeline (BullMQ-backed, Remotive as the real provider) — see the README for the current, accurate module map. Genuine remaining future work: a stage-history model for analytics (current implementation is current-status-only, not historical), real LinkedIn/Indeed partner integration, and additional ATS adapters beyond Greenhouse/generic.

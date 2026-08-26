@@ -1,6 +1,6 @@
 # Installation & Setup Guide
 
-Complete installation instructions for the Job Application Tracker Portal.
+Complete installation instructions for TrackTrail.
 
 ---
 
@@ -23,11 +23,11 @@ Complete installation instructions for the Job Application Tracker Portal.
 ### Minimum Requirements
 
 | Requirement | Version                                                                       | Download                                        |
-| ----------- | ----------------------------------------------------------------------------- | ----------------------------------------------- |
-| Node.js     | 16.x or higher                                                                | [nodejs.org](https://nodejs.org)                |
-| npm         | 7.x or higher                                                                 | Comes with Node.js                              |
+| ----------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| Node.js     | 18.x or higher                                                                | [nodejs.org](https://nodejs.org)                |
+| npm         | 9.x or higher                                                                 | Comes with Node.js                              |
 | PostgreSQL  | Hosted instance (Neon, Supabase, Render, etc.)                                | No local install needed — just a connection URL |
-| Redis       | Local or hosted (Upstash, etc.) — used by the matching/apply/analytics engine | [redis.io](https://redis.io)                    |
+| Redis       | Local or hosted (Upstash, etc.) — required for the worker process             | [redis.io](https://redis.io)                    |
 | Git         | Latest                                                                        | [git-scm.com](https://git-scm.com)              |
 
 ### Recommended Specifications
@@ -55,11 +55,11 @@ Complete installation instructions for the Job Application Tracker Portal.
 ```bash
 # Check Node.js version
 node --version
-# Expected: v16.0.0 or higher
+# Expected: v18.0.0 or higher
 
 # Check npm version
 npm --version
-# Expected: 7.0.0 or higher
+# Expected: 9.0.0 or higher
 
 # Check Git version
 git --version
@@ -73,7 +73,7 @@ git --version
 ### Step 1: Navigate to Server Directory
 
 ```bash
-cd "Job Application Tracker Portal"
+cd TrackTrail
 cd server
 ```
 
@@ -104,16 +104,24 @@ cp .env.example .env
 ```
 
 Edit `.env` with your Postgres connection string, JWT secret, and (optionally)
-Gmail/Redis configuration — see [Environment Setup](#environment-setup) below.
+Gmail/Redis/Resend configuration — see [Environment Setup](#environment-setup) below.
 
-### Step 5 (one-time): Apply the Database Schema
+### Step 5 (one-time): Set Up the Database with Prisma
+
+This project uses **Prisma**, not a hand-written SQL schema file.
 
 ```bash
-npm run db:migrate
+npx prisma generate       # generates the Prisma client from prisma/schema.prisma
+npx prisma migrate deploy # applies the committed migrations against DATABASE_URL
 ```
 
-This runs `db/schema.sql` against whatever `DATABASE_URL` points to,
-creating all tables the app needs. Safe to re-run any time.
+Safe to re-run. Creates every table the app needs, both the auth/tracker
+tables and the intelligent job-application engine's tables.
+
+> `npm run db:migrate` also exists in `package.json` but is dead code from an
+> earlier, pre-Prisma version of this project — it tries to read a
+> `db/schema.sql` file that no longer exists in the repository and will
+> fail. Use the `prisma` commands above instead.
 
 ---
 
@@ -149,7 +157,7 @@ If you need to point the frontend at a specific backend, create/edit `.env` in
 the `client` directory:
 
 ```env
-VITE_API_BASE_URL=https://Automated-Job-Application-Tracking-System-with-Email-Ingestion-and-Analytics-Pipeline-o1ls.onrender.com
+VITE_API_BASE_URL=https://your-deployed-backend.example.com
 ```
 
 Falls back to `http://localhost:5000` if unset.
@@ -195,7 +203,8 @@ Then apply the schema once:
 
 ```bash
 cd server
-npm run db:migrate
+npx prisma generate
+npx prisma migrate deploy
 ```
 
 ### Verify Database Connection
@@ -211,8 +220,9 @@ npm start
 Expected output:
 
 ```
-Server Running on 5000
 Postgres connected
+job_sources seeded (manual/linkedin/indeed/gmail/extension)
+Server Running on 5000
 ```
 
 ---
@@ -233,43 +243,55 @@ cp .env.example .env
 Edit `server/.env` with proper values:
 
 ```env
-# ===== DATABASE =====
+# ===== DATABASE (required) =====
 DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
-# ===== SERVER =====
+# ===== SERVER (required) =====
 PORT=5000
-
-# ===== JWT =====
 JWT_SECRET=your_super_secret_key_min_32_characters_long_here_12345
+CLIENT_URL=http://localhost:5173
 
-# ===== CLIENT =====
-CLIENT_URL=https://Automated-Job-Application-Tracking-System-with-Email-Ingestion-and-Analytics-Pipeline-ten.vercel.app,http://localhost:5173
+# ===== REDIS (optional, but required to run `npm run worker`) =====
+REDIS_URL=
 
 # ===== GMAIL INTEGRATION (optional — leave blank to disable) =====
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=
 
-# ===== PLAYWRIGHT APPLY/SCRAPE WORKER =====
+# ===== PLAYWRIGHT APPLY ENGINE (optional) =====
 PLAYWRIGHT_PROFILE_DIR=./playwright-profile
 PLAYWRIGHT_HEADLESS=true
 
-# ===== REDIS (queues for the matching/apply/analytics engine) =====
-REDIS_URL=
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
+# ===== FORGOT-PASSWORD EMAILS (optional) =====
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+
+# ===== LINKEDIN/INDEED PARTNER APIS (optional, provider-specific) =====
+# Setting these only flips the adapters' "configured" flag — no official
+# LinkedIn Talent Solutions or Indeed partner API call is implemented
+# behind them yet, so setting these alone does not make search work.
+LINKEDIN_TALENT_API_TOKEN=
+INDEED_PARTNER_FEED_URL=
 ```
+
+Remotive (the working Job Discovery provider) needs **no environment
+variable at all** — it's a public API with no auth requirement.
 
 ### Variable Definitions
 
-| Variable                                                            | Purpose                                                                   | Example                                          |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------ |
-| `DATABASE_URL`                                                      | Hosted Postgres connection URL — used by everything, auth included        | `postgresql://user:pass@host/db?sslmode=require` |
-| `PORT`                                                              | Server port                                                               | `5000`                                           |
-| `JWT_SECRET`                                                        | Token secret (min 32 chars)                                               | `my_secret_key_...`                              |
-| `CLIENT_URL`                                                        | Frontend URL(s) for CORS, comma-separated                                 | `http://localhost:5173`                          |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Gmail OAuth (optional) — see [GMAIL_INTEGRATION.md](GMAIL_INTEGRATION.md) | —                                                |
-| `REDIS_URL` / `REDIS_HOST` / `REDIS_PORT`                           | Queue backend for the matching/apply/analytics engine                     | `rediss://default:...`                           |
+| Variable                                                            | Required?             | Purpose                                                                   |
+| --------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                       | Required               | Hosted Postgres connection URL (used via Prisma) — used by everything, auth included |
+| `PORT`                                                                | Required               | Server port                                                                |
+| `JWT_SECRET`                                                          | Required               | Token secret (min 32 chars)                                               |
+| `CLIENT_URL`                                                          | Required               | Frontend URL(s) for CORS, comma-separated                                 |
+| `REDIS_URL`                                                           | Optional (required for `npm run worker`) | Queue backend for discovery/matching/apply/analytics; defaults to `redis://127.0.0.1:6379` if unset |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI`  | Optional               | Gmail OAuth — see [GMAIL_INTEGRATION.md](GMAIL_INTEGRATION.md)            |
+| `PLAYWRIGHT_PROFILE_DIR` / `PLAYWRIGHT_HEADLESS`                     | Optional               | Apply-engine browser session config                                       |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL`                                | Optional               | Forgot-password emails; skipped (logged, not sent) if unset               |
+| `SERVER_URL` / `EXTENSION_REDIRECT_URL`                              | Optional               | Gmail OAuth redirect handling for the browser extension flow              |
+| `LINKEDIN_TALENT_API_TOKEN` / `INDEED_PARTNER_FEED_URL`               | Optional, provider-specific | Only flips an availability flag — no real API call is implemented behind either yet |
 
 **Security Note**: Never commit `.env` to version control. It's already in `.gitignore`.
 
@@ -280,7 +302,7 @@ REDIS_PORT=6379
 ### Prerequisites Met?
 
 - [ ] Node.js and npm installed
-- [ ] `DATABASE_URL` configured and schema applied (`npm run db:migrate`)
+- [ ] `DATABASE_URL` configured and schema applied (`npx prisma migrate deploy`)
 - [ ] `.env` file configured
 - [ ] Dependencies installed for both server and client
 
@@ -296,8 +318,9 @@ npm start
 Expected output:
 
 ```
-Server Running on 5000
 Postgres connected
+job_sources seeded (manual/linkedin/indeed/gmail/extension)
+Server Running on 5000
 ```
 
 **Terminal 2 - Start Frontend:**
@@ -316,16 +339,16 @@ Expected output:
   ➜  press h to show help
 ```
 
-**Terminal 3 (optional) - Background Engine Workers:**
+**Terminal 3 (recommended) - Background Engine Workers:**
 
 ```bash
 cd server
 npm run worker
 ```
 
-Required only if you want the matching/apply/analytics engine (scraping,
-scoring, semi-automated apply) running — the core tracker (register, login,
-add/edit/delete jobs) works without it.
+Required if you want Job Discovery, matching, the apply engine, and
+analytics rollups running — the core tracker (register, login, add/edit/
+delete jobs) works without it. Needs Redis to be reachable.
 
 ### Method 2: Production Build
 
@@ -387,7 +410,15 @@ Expected: Dashboard loads successfully
    - Status: `Applied`
 3. Save
 
-Expected: Job appears in dashboard
+Expected: Job appears in your Applied Jobs list
+
+### Step 6: Test Job Discovery (optional, requires the worker running)
+
+1. Go to `/job-discovery`
+2. Search for a role (Remotive is on by default)
+3. Poll status until it reaches `succeeded`
+
+Expected: Real Remotive listings appear; LinkedIn/Indeed (if selected) show as "unavailable"
 
 ### Verification Checklist
 
@@ -427,7 +458,12 @@ npm cache clean --force
 - Verify `DATABASE_URL` in `server/.env` is the exact URL your provider gave you
 - Make sure `?sslmode=require` is included if your provider needs it (most hosted providers do)
 - Confirm the database is active (some free tiers pause after inactivity)
-- Run `npm run db:migrate` again to confirm the schema applied cleanly
+- Run `npx prisma migrate deploy` again to confirm the schema applied cleanly
+
+### Problem: "Table does not exist" / Prisma errors on startup
+
+**Solution:** Run `npx prisma generate && npx prisma migrate deploy` — the
+Prisma client or the database schema hasn't been set up yet.
 
 ### Problem: Port Already in Use
 
@@ -456,7 +492,7 @@ PORT=5001
 Verify `.env` has correct URLs:
 
 ```env
-CLIENT_URL=https://Automated-Job-Application-Tracking-System-with-Email-Ingestion-and-Analytics-Pipeline-ten.vercel.app,http://localhost:5173
+CLIENT_URL=http://localhost:5173
 ```
 
 Restart server after changing.
@@ -503,9 +539,14 @@ npm run dev
 **Causes & Solutions:**
 
 1. Check `JWT_SECRET` in `.env` is set
-2. Confirm `npm run db:migrate` ran successfully (the `users` table must exist)
+2. Confirm `npx prisma migrate deploy` ran successfully (the `users` table must exist)
 3. Check browser console for errors
 4. Restart both servers
+
+### Problem: Job Discovery runs stay "queued"
+
+**Solution:** The worker process (`npm run worker`) isn't running, or can't
+reach Redis (`REDIS_URL`). Start it in a third terminal.
 
 ### Getting Help
 
@@ -540,8 +581,9 @@ npm run dev
 # Install all dependencies
 npm install
 
-# Apply/re-apply the Postgres schema
-npm run db:migrate
+# Set up / re-apply the Prisma schema
+npx prisma generate
+npx prisma migrate deploy
 
 # Start development server
 npm start
@@ -567,5 +609,4 @@ npm audit fix
 
 ---
 
-**Last Updated**: July 20, 2026  
-**Version**: 2.0.0 (PostgreSQL)
+**Last Updated**: August 25, 2026

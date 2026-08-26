@@ -15,6 +15,7 @@ Complete guide to deploying the Job Application Tracker Portal to production.
 - [ ] Code reviewed
 - [ ] Production .env ready
 - [ ] Deployment account/credentials ready
+- [ ] A reachable Redis instance provisioned, if you plan to deploy the worker process (Job Discovery, matching, apply engine, analytics rollup — see "Background Workers" below)
 
 ---
 
@@ -381,7 +382,31 @@ app.use(compression());
 
 5. **Monitoring**
    - Use your provider's built-in query/connection dashboard
-   - Watch for slow queries — `server/@prisma/client.js` already logs any query over 200ms
+   - `server/lib/prisma.js` configures Prisma's own `log: ["warn", "error"]` (dev) / `["error"]` (prod) — there is no custom slow-query (e.g. 200ms threshold) logger in this codebase; rely on your Postgres provider's dashboard for query timing
+
+---
+
+## Background Workers (Redis + BullMQ)
+
+The API process (`npm start` / `server.js`) and the worker process
+(`npm run worker` / `worker.js`) are separate Node processes. The API alone
+is enough for the manual tracker (auth, add/edit/delete jobs). The worker
+process is what actually runs Job Discovery, matching, the apply engine, and
+the analytics rollup — deploy both if you want those features working.
+
+1. **Redis**
+   - Any reachable Redis instance works (self-hosted, or a managed provider like Upstash)
+   - Set `REDIS_URL` for both the API and worker process's environment — `queue/index.js` falls back to `redis://127.0.0.1:6379` if unset, which is almost never correct in a hosted deployment
+   - Enable AOF persistence if you don't want queued-but-not-yet-processed jobs to disappear on a Redis restart
+
+2. **Deploying the worker**
+   - Same codebase as the API (`server/`), different start command: `npm run worker` instead of `npm start`
+   - Deploy it as its own process/service (e.g. a second Render "Background Worker" service, a separate Railway service, or a second PM2 process) — not as a second copy of the web server
+   - It needs the same `DATABASE_URL` as the API, plus `REDIS_URL`
+
+3. **Job Discovery provider availability**
+   - Remotive (the working discovery provider) needs no credentials in any environment — it just needs the worker to be able to reach `remotive.com`
+   - LinkedIn and Indeed are not deployable as functional search providers in any environment; both require official partner API access that this project doesn't currently have, not just an environment variable — see the README's Job Discovery section
 
 ---
 
@@ -444,8 +469,13 @@ const client = redis.createClient();
 
 ### Database Indexing
 
+This project uses Prisma migrations, not a hand-written `db/schema.sql` (that
+file doesn't exist in the current version of this project). Indexes are
+defined directly in `server/prisma/schema.prisma` and applied via
+`npx prisma migrate deploy`. Illustrative example of the kind of index already in place:
+
 ```javascript
--- In db/schema.sql
+// server/prisma/schema.prisma
 CREATE INDEX IF NOT EXISTS idx_tracked_jobs_user_id ON tracked_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_tracked_jobs_status ON tracked_jobs(status);
 ```
@@ -635,7 +665,7 @@ pm2 delete app-name
 ## Checklist for Production
 
 - [ ] Environment variables configured
-- [ ] Hosted PostgreSQL database provisioned and schema migrated (`npm run db:migrate`)
+- [ ] Hosted PostgreSQL database provisioned and schema migrated (`npx prisma migrate deploy` — not `npm run db:migrate`, which is dead code from an earlier pre-Prisma version of this project)
 - [ ] SSL/HTTPS enabled
 - [ ] CORS properly configured
 - [ ] Security headers in place

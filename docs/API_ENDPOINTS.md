@@ -1,6 +1,6 @@
 # API Endpoints Documentation
 
-Complete reference for all Job Application Tracker Portal API endpoints.
+Complete reference for all TrackTrail API endpoints.
 
 ---
 
@@ -10,8 +10,7 @@ Complete reference for all Job Application Tracker Portal API endpoints.
 http://localhost:5000/api
 ```
 
-In production this is whatever host you deploy the server to (e.g.
-`https://Automated-Job-Application-Tracking-System-with-Email-Ingestion-and-Analytics-Pipeline-o1ls.onrender.com/api`).
+In production this is whatever host you deploy the server to.
 
 ---
 
@@ -26,6 +25,16 @@ token: <your_jwt_token>
 
 The token is returned by `POST /api/auth/login` and doesn't currently carry an
 expiry — it's valid until your `JWT_SECRET` changes.
+
+**Current auth coverage** (verified against `server/server.js`'s route mounting
+and each route file): `/api/auth` and `/api/gmail` are public/self-contained;
+`/api/jobs` requires the token on every route (checked inside `jobRoutes.js`).
+`/api/ingest`, `/api/engine/jobs`, `/api/applications`, `/api/analytics`,
+`/api/profile`, `/api/companies`, and `/api/sources` all require the token,
+applied at the `app.use(...)` mount level in `server.js`. `/api/scrape` also
+requires the token on every route, applied per-handler inside
+`scrapeRoutes.js` rather than at the mount level — functionally identical,
+just organized differently in the code.
 
 ---
 
@@ -107,8 +116,10 @@ or
 { "message": "Invalid Password" }
 ```
 
-> There is no `/logout` or `/profile` endpoint — logout is handled entirely on
-> the frontend by discarding the stored token.
+> There is no `/logout` endpoint — logout is handled entirely on the frontend
+> by discarding the stored token. There is also a forgot/reset-password flow
+> (`server/routes/authRoutes.js`, `RESEND_API_KEY`-backed) not detailed here —
+> see the route file directly for its exact shape.
 
 ---
 
@@ -148,6 +159,11 @@ owned by the authenticated user.
   "updatedAt": "2026-07-20T08:00:00.000Z"
 }
 ```
+
+If enough data is present (company + role + a description or a source URL),
+the job is also bridged into the engine pipeline in the background so it can
+be matched/scored like a discovered job — see `services/engineBridge.js`.
+This is fire-and-forget and never blocks or fails this response.
 
 ### 4. Get All Jobs
 
@@ -219,7 +235,7 @@ filters client-side.
 ## 📧 Gmail Integration Endpoints (`/api/gmail`)
 
 See [GMAIL_INTEGRATION.md](GMAIL_INTEGRATION.md) for the full OAuth setup.
-All endpoints below require the `token` header unless noted.
+All endpoints below require the `token` header.
 
 ### 7. Get Auth URL
 
@@ -291,21 +307,139 @@ subject lines.
 
 ---
 
+## 🔎 Job Discovery Endpoints (`/api/scrape`)
+
+Async discovery runs — the client triggers a run, then polls for status. See
+the README's "Job Discovery" section for the full architecture. All endpoints
+below require the `token` header and are ownership-scoped to the
+authenticated user (a user can only see/act on their own runs).
+
+**Discovery providers:** `remotive` is the only functional provider — a
+free, public API with no credentials required. `linkedin` and `indeed` are
+registered as valid `sources` values but their adapters always report
+`status: "unavailable"` — this project does not scrape either platform or
+attempt to bypass anti-bot protection, and no official partner API
+integration exists yet for either one.
+
+### 12. Start a Discovery Run
+
+**POST** `/api/scrape/run`
+
+**Request Body:**
+
+```json
+{
+  "query": "backend engineer",
+  "location": "remote",
+  "sources": ["remotive"],
+  "limit": 25
+}
+```
+
+`query` is required (max 255 chars). `location` is optional. `sources`
+defaults to all registered sources if omitted; any value not in
+`["linkedin", "indeed", "remotive"]` is rejected. `limit` defaults to 25, max
+50. Rate-limited to 6 runs per hour per user.
+
+**Response (202):**
+
+```json
+{ "status": "queued", "runId": 14, "sources": ["remotive"] }
+```
+
+**Error (400):** invalid query/sources/limit.
+**Error (429):**
+
+```json
+{ "message": "You can trigger at most 6 discovery runs per hour. Try again later." }
+```
+
+### 13. List Recent Runs
+
+**GET** `/api/scrape/runs`
+
+Returns the authenticated user's most recent runs (newest first, capped at
+20) — this is what powers the "Recent runs" list on the Job Discovery page.
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    { "id": 14, "query": "backend engineer", "sources": ["remotive"], "status": "succeeded", "createdAt": "2026-08-20T10:00:00.000Z" }
+  ]
+}
+```
+
+### 14. Poll a Run's Status
+
+**GET** `/api/scrape/runs/:id`
+
+The dynamic polling endpoint the dashboard calls every few seconds while a
+run is `queued`/`running`. Intentionally sent with `Cache-Control: no-store`
+and without an `ETag`, so it can never return a `304 Not Modified` — a stock
+Express JSON response would otherwise be conditionally cacheable, and a raw
+304 reaching the frontend's axios client (which only treats 2xx as success)
+would throw and silently kill the polling loop. This is the only endpoint in
+the API with this behavior; nothing else was changed.
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": 14,
+    "status": "succeeded",
+    "query": "backend engineer",
+    "sources": ["remotive"],
+    "results": { "remotive": { "status": "ok", "found": 12, "ingested": 9 } },
+    "createdAt": "2026-08-20T10:00:00.000Z"
+  }
+}
+```
+
+`status` is one of `queued`, `running`, `succeeded`, `failed`, `blocked`.
+
+**Error (404):** run doesn't exist, or belongs to a different user.
+
+### 15. Remove a Run
+
+**DELETE** `/api/scrape/runs/:id`
+
+Deletes one of the authenticated user's own run-history rows. This removes
+only that `ScrapeRun` record — it never touches the shared `jobs` catalog,
+`applications`, `match_scores`, or any `tracked_jobs` row, since a discovery
+run's history is unrelated to what it may have ingested.
+
+**Response (200):**
+
+```json
+{ "message": "Run removed" }
+```
+
+**Error (404):** run doesn't exist, or belongs to a different user (never
+distinguishes the two, so a user can't probe for other users' run ids).
+
+---
+
 ## 🤖 Intelligent Job Application Engine
 
 These endpoints back the scraping/matching/apply/analytics engine described
 in [intelligent-job-application-engine-design.md](intelligent-job-application-engine-design.md).
 They read/write the Postgres `jobs`, `companies`, `job_sources`,
-`applications`, `match_scores`, `user_profile`, and `analytics_daily` tables
-— separate from the `tracked_jobs` table used by `/api/jobs` above. None of
-these currently require the `token` auth header.
+`applications`, `match_scores`, `user_profile`, and `tracked_jobs` tables
+(via Prisma) — separate from `/api/jobs`' `tracked_jobs`-only usage above,
+though `tracked_jobs` is also the source of truth for Applied Jobs and
+Analytics. **All endpoints in this section require the `token` header**
+(applied at the `app.use(...)` mount level in `server.js`).
 
-### 12. Ingest a Job
+### 16. Ingest a Job
 
 **POST** `/api/ingest`
 
-Shared entrypoint used by both the Playwright scraper and the browser
-extension's manual capture.
+Shared entrypoint used by Job Discovery (Remotive results), the browser
+extension's manual capture, and the manual tracker's engine bridge — one
+normalization/dedup code path for all three.
 
 **Request Body:**
 
@@ -316,8 +450,8 @@ extension's manual capture.
   "description": "Full job description text...",
   "location": "Remote",
   "remoteType": "remote",
-  "sourceName": "linkedin",
-  "sourceUrl": "https://www.linkedin.com/jobs/view/12345",
+  "sourceName": "remotive",
+  "sourceUrl": "https://remotive.com/remote-jobs/software-dev/backend-engineer-12345",
   "externalJobId": "12345",
   "postedAt": "2026-07-15T00:00:00.000Z"
 }
@@ -328,7 +462,7 @@ extension's manual capture.
 **Response (201):** result of normalization/dedup/insert (job id, whether it
 was a duplicate, etc. — see `services/ingestionService.js`).
 
-### 13. Browse Engine Jobs
+### 17. Browse Engine Jobs
 
 **GET** `/api/engine/jobs?status=matched&minScore=70&page=1&pageSize=25`
 
@@ -353,28 +487,36 @@ was a duplicate, etc. — see `services/ingestionService.js`).
 }
 ```
 
-### 14. Get a Single Engine Job
+### 18. Get a Single Engine Job
 
 **GET** `/api/engine/jobs/:id`
 
 **Response (200):** `{ "data": { ...full job row, company, score, explanation } }`
 **Error (404):** `{ "message": "Job not found" }`
 
-### 15. Start an Application
+### 19. Start an Application
 
 **POST** `/api/applications/:jobId`
 
-Enqueues the Playwright apply worker for this job (`apply:prepare`).
+Enqueues the Playwright apply worker for this job (`apply:prepare`), and also
+creates/updates a `TrackedJob` row for the authenticated user so it shows up
+on their Applied Jobs page. `applications` itself is a global, job-keyed
+automation record (see the README's Database Design section) — ownership for
+subsequent actions on it is derived through the caller's own `TrackedJob`.
 
 **Response (202):**
 
 ```json
-{ "status": "queued", "jobId": 101 }
+{ "status": "queued", "jobId": 101, "trackedJobId": 57 }
 ```
 
-### 16. List Applications
+### 20. List Applications
 
 **GET** `/api/applications?status=pending_review`
+
+Returns only the engine applications whose underlying job the authenticated
+user has actually tracked/applied to (via their own `TrackedJob` rows) — not
+every user's applications.
 
 **Response (200):**
 
@@ -385,28 +527,29 @@ Enqueues the Playwright apply worker for this job (`apply:prepare`).
       "id": 5,
       "job_id": 101,
       "status": "pending_review",
-      "title": "Backend Engineer",
-      "source_url": "https://...",
-      "company": "Acme Inc"
+      "jobs": { "title": "Backend Engineer", "source_url": "https://...", "companies": { "name": "Acme Inc" } }
     }
   ]
 }
 ```
 
-### 17. Confirm Manual Submit
+### 21. Confirm Manual Submit
 
 **POST** `/api/applications/:id/submit`
 
 Called once the user has manually clicked submit in the Playwright-driven
-session.
+session. Ownership-checked (404, not 403, if the application isn't tied to
+one of the caller's own tracked jobs — never confirms another user's
+application id even exists). Also syncs the matching `TrackedJob.status` to
+`Applied`.
 
 **Response (200):**
 
 ```json
-{ "status": "applied" }
+{ "status": "applied", "jobId": 101 }
 ```
 
-### 18. Record an Outcome
+### 22. Record an Outcome
 
 **POST** `/api/applications/:id/outcome`
 
@@ -416,8 +559,11 @@ session.
 { "status": "interview" }
 ```
 
-`status` must be one of `interview`, `rejected`, `offer`. Also nudges the
-matching engine's per-skill weights via the learning loop.
+`status` must be one of `interview`, `rejected`, `offer`. Ownership-checked
+the same way as `/submit`. Also mirrors the outcome onto the caller's
+`TrackedJob.status` (Title-Case: `Interview`/`Rejected`/`Offer`) so Applied
+Jobs and Analytics reflect it, and nudges the matching engine's per-skill
+weights via the learning loop.
 
 **Response (200):**
 
@@ -425,9 +571,75 @@ matching engine's per-skill weights via the learning loop.
 { "status": "updated" }
 ```
 
-### 19. Analytics Summary
+### 23. Analytics Summary (live, per-user)
 
-**GET** `/api/analytics/summary?range=30d`
+**GET** `/api/analytics?range=30`
+
+This is the endpoint the Analytics dashboard actually calls (`/api/analytics/metrics`
+is an identical alias). Computed live, scoped to the authenticated user's own
+`tracked_jobs` — never aggregates across users. `range` is a number of days
+(default 30).
+
+**Response (200):**
+
+```json
+{
+  "meta": { "rangeDays": 30, "computedFrom": ["tracked_jobs.application_date", "tracked_jobs.status", "scoped to the authenticated user"] },
+  "data": {
+    "totalApplications": 10,
+    "responseRatePct": 30.0,
+    "conversionRate": {
+      "appliedToInterviewPct": 20.0,
+      "interviewToOfferPct": 50.0,
+      "appliedToOfferPct": 10.0
+    },
+    "averageResponseTimeHours": null,
+    "counts": { "responses": 3, "interviews": 2, "offers": 1 }
+  }
+}
+```
+
+`conversionRate` percentages are based on each application's *current*
+status (not full stage history — see the README's Analytics section).
+`averageResponseTimeHours` is always `null` — the schema has no reliable
+stage-transition timestamp to compute it from, so it's intentionally left
+unset rather than reporting an inaccurate number. A denominator of zero
+renders as `null` here (shown as `—` in the UI), never `0`.
+
+### 24. Analytics Funnel (live, per-user)
+
+**GET** `/api/analytics/funnel`
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "scraped": 120,
+    "matched": 8,
+    "applied": 10,
+    "interview": 2,
+    "offer": 1
+  }
+}
+```
+
+`scraped` is a genuinely global count (the whole shared `jobs` catalog —
+every user sees the same underlying discovery data). `matched` is scoped to
+jobs matched against the authenticated user's own profile
+(`match_scores.profile_id -> user_profile.user_id`). `applied`/`interview`/
+`offer` come from the user's own `tracked_jobs`.
+
+### 25. Legacy Analytics Snapshot (not used by the frontend)
+
+**GET** `/api/analytics/summary?range=30`
+
+A separate, older endpoint reading from the `analytics_daily` rollup table
+(populated by a scheduled worker, `workers/analyticsWorker.js`). Still
+mounted and functional, but **the current frontend does not call this
+endpoint** — it's kept for any external tooling that might still expect the
+precomputed-rollup shape. `analytics_daily` itself has no per-user dimension
+(it's a genuinely system-wide daily aggregate), unlike endpoint 23 above.
 
 **Response (200):**
 
@@ -444,31 +656,15 @@ matching engine's per-skill weights via the learning loop.
 }
 ```
 
-### 20. Analytics Funnel
-
-**GET** `/api/analytics/funnel`
-
-**Response (200):**
-
-```json
-{
-  "data": {
-    "scraped": 120,
-    "matched": 34,
-    "applied": 18,
-    "interview": 5,
-    "offer": 1
-  }
-}
-```
-
-### 21. Get Profile
+### 26. Get Profile
 
 **GET** `/api/profile`
 
-**Response (200):** `{ "data": { ...user_profile row, or null if none set } }`
+Returns the authenticated user's own resume/skills profile.
 
-### 22. Create/Update Profile
+**Response (200):** `{ "data": { ...user_profile row for this user, or null if they haven't created one } }`
+
+### 27. Create/Update Profile
 
 **POST** `/api/profile`
 
@@ -484,17 +680,19 @@ matching engine's per-skill weights via the learning loop.
 }
 ```
 
-**Response:** `201 { "status": "created" }` on first save, or
-`200 { "status": "updated" }` on subsequent saves — there's only ever one
-profile row.
+Creates or updates the authenticated user's own profile row — every user has
+their own; profiles are not shared.
 
-### 23. List Companies
+**Response:** `201 { "status": "created" }` on first save, or
+`200 { "status": "updated" }` on subsequent saves.
+
+### 28. List Companies
 
 **GET** `/api/companies?search=acme&page=1&pageSize=25`
 
 Browses the `companies` table (deduped employers discovered by the
-ingestion pipeline), with a job count per company. `search` matches
-against name or domain (case-insensitive).
+ingestion pipeline — shared/global, not per-user), with a job count per
+company. `search` matches against name or domain (case-insensitive).
 
 **Response (200):**
 
@@ -514,31 +712,35 @@ against name or domain (case-insensitive).
 }
 ```
 
-### 24. Get a Single Company
+### 29. Get a Single Company
 
 **GET** `/api/companies/:id`
 
 **Response (200):** `{ "data": { ...company row, "jobs": [ ...up to 25 recent jobs ] } }`
 **Error (404):** `{ "message": "Company not found" }`
 
-### 25. List Job Sources
+### 30. List Job Sources
 
 **GET** `/api/sources`
 
-Browses the `job_sources` table (LinkedIn, Indeed, etc — everywhere the
-scraper pulls listings from), with a job count per source.
+Browses the `job_sources` table (shared/global — `manual`, `linkedin`,
+`indeed`, `remotive`, `gmail`, `extension`), with a job count per source.
+`linkedin`/`indeed`/`remotive` are treated as "global engine source" counts
+(jobs ingested by Job Discovery); their job counts reflect the whole shared
+catalog, same as before — this endpoint doesn't expose per-user data.
 
 **Response (200):**
 
 ```json
 {
   "data": [
-    { "id": 1, "name": "linkedin", "baseUrl": "https://www.linkedin.com", "createdAt": "2026-05-01T00:00:00.000Z", "jobCount": 84 }
+    { "id": 1, "name": "remotive", "baseUrl": "https://remotive.com", "createdAt": "2026-05-01T00:00:00.000Z", "jobCount": 84 },
+    { "id": 2, "name": "linkedin", "baseUrl": "https://www.linkedin.com", "createdAt": "2026-05-01T00:00:00.000Z", "jobCount": 0 }
   ]
 }
 ```
 
-### 26. Get a Single Source
+### 31. Get a Single Source
 
 **GET** `/api/sources/:id`
 
@@ -553,17 +755,18 @@ scraper pulls listings from), with a job count per source.
 | ---- | ---------------------------------------------------------------- |
 | 200  | OK - Successful request                                          |
 | 201  | Created - Resource created successfully                          |
-| 202  | Accepted - Work enqueued (apply engine)                          |
+| 202  | Accepted - Work enqueued (discovery run, apply engine)           |
 | 400  | Bad Request - Invalid input                                      |
-| 401  | Unauthorized - Missing/invalid token (tracker/auth/gmail routes) |
-| 404  | Not Found - Resource not found                                   |
+| 401  | Unauthorized - Missing/invalid token                             |
+| 404  | Not Found - Resource not found (or not owned by the caller)      |
+| 429  | Too Many Requests - Discovery run rate limit exceeded            |
 | 500  | Server Error - Internal server error                             |
 
 ---
 
 ## Common Errors
 
-### Missing Token (tracker/gmail routes)
+### Missing Token
 
 ```json
 { "message": "No token, authorization denied" }
@@ -632,22 +835,31 @@ curl -X GET http://localhost:5000/api/jobs \
   -H "token: <your_token>"
 ```
 
-### Seed an Engine Profile
+### Start a Discovery Run (Remotive)
 
 ```bash
-curl -X POST http://localhost:5000/api/profile \
+curl -X POST http://localhost:5000/api/scrape/run \
+  -H "token: <your_token>" \
   -H "Content-Type: application/json" \
-  -d '{"fullName":"Your Name","email":"you@example.com","resumeText":"...","skills":["react","node.js","postgresql"]}'
+  -d '{"query": "backend engineer", "sources": ["remotive"], "limit": 25}'
+```
+
+### Poll a Run
+
+```bash
+curl -X GET http://localhost:5000/api/scrape/runs/14 \
+  -H "token: <your_token>"
 ```
 
 ---
 
 ## Rate Limiting
 
-No rate limiting is enforced on the tracker/auth API. The engine's Playwright
-scraper/apply worker does rate-limit itself per target domain via a
-Redis-backed token bucket (see `services/rateLimiter.js`) — that's an
-internal safeguard, not an API-level limit.
+Job Discovery is rate-limited to 6 runs per hour per user (see endpoint 12,
+above). The engine's Playwright apply worker separately rate-limits itself
+per target domain via a Redis-backed token bucket (see
+`services/rateLimiter.js`) — an internal safeguard, not a client-facing API
+limit. No other endpoint in this API is rate-limited.
 
 ---
 
@@ -657,4 +869,4 @@ internal safeguard, not an API-level limit.
 
 ---
 
-**Last Updated**: July 20, 2026
+**Last Updated**: August 25, 2026
