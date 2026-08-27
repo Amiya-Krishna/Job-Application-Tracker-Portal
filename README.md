@@ -145,13 +145,29 @@ flowchart LR
 
 ![Data Flow](outputs/data_flow.png)
 
-### Login Page
+### Adding Jobs Manually 
 
-![Login Page](outputs/Login_Page.png)
+![Adding Jobs Manually](outputs/tracker-add-jobs.jpg)
 
-### Dashboard (Matched Jobs)
+### Dashboard
 
-![Dashboard](outputs/dashboard.png)
+![Dashboard](outputs/tracker-dashboard.jpg)
+
+### Analytics
+
+![Analytics](outputs/tracker-analytics.jpg)
+
+### Email Integration
+
+![Email Integration](outputs/tracker-email-integration.jpg)
+
+### Job Discovery
+
+![Job Discovery](outputs/tracker-job-discovery.jpg)
+
+### Matched Jobs
+
+![Matched Jobs](outputs/tracker-matched-job.jpg)
 
 ### System Architecture
 
